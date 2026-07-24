@@ -1,0 +1,1830 @@
+﻿const serviceButtons = document.querySelectorAll('.service-tabs button');
+const servicePanels = document.querySelectorAll('.service-content');
+
+const DEFAULT_WHATSAPP = '+260768130131';
+const ADMIN_EMAIL = 'vplusopticians@gmail.com';
+
+  // Export / Import catalog so admins can move catalog (and uploaded images) between devices
+  const exportBtn = document.getElementById('export-catalog');
+  const importInput = document.getElementById('import-catalog');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      try {
+        const data = JSON.stringify(catalogItems || [], null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'visionplus_catalog.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        createToast('Catalog exported');
+      } catch (err) {
+        createToast('Export failed', { type: 'error' });
+      }
+    });
+  }
+
+  if (importInput) {
+    importInput.addEventListener('change', (e) => {
+      const f = importInput.files && importInput.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed)) throw new Error('Invalid catalog file');
+          saveCatalog(parsed);
+          renderAdminItemList();
+          createToast('Catalog imported — images included');
+        } catch (err) {
+          createToast('Import failed: ' + (err.message || 'invalid file'), { type: 'error' });
+        }
+      };
+      reader.readAsText(f);
+      // clear selection so same file can be re-imported if needed
+      importInput.value = '';
+    });
+  }
+const ADMIN_EMAIL_ALT = 'vplusopticians,@gmail.com';
+const ADMIN_PASSWORD = 'admin1234';
+const BACKEND_DEFAULT_URL = 'http://localhost:4000';
+const STORAGE_WHATSAPP = 'visionplus_whatsapp_number';
+const STORAGE_CATALOG = 'visionplus_catalog_items';
+const STORAGE_CART = 'visionplus_cart';
+const STORAGE_USERS = 'visionplus_users';
+const SESSION_CUSTOMER = 'visionplus_customer';
+const STORAGE_FIREBASE_CONFIG = 'visionplus_firebase_config';
+const STORAGE_CLOUD_SYNC = 'visionplus_cloud_sync_enabled';
+const STORAGE_BACKEND_URL = 'visionplus_backend_url';
+const STORAGE_BACKEND_TOKEN = 'visionplus_backend_token';
+const STORAGE_BACKEND_ENABLED = 'visionplus_backend_enabled';
+
+let firebaseInitialized = false;
+let firebaseApp = null;
+let firebaseFirestore = null;
+let firebaseStorage = null;
+let cloudListenerUnsub = null;
+let backendPoller = null;
+let backendSocket = null;
+
+function loadFirebaseSdk() {
+  return new Promise((resolve, reject) => {
+    if (window.firebase && window.firebase.apps) return resolve();
+    const scripts = [
+      'https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js',
+      'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js',
+      'https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js',
+    ];
+    let loaded = 0;
+    scripts.forEach(src => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = () => {
+        loaded += 1;
+        if (loaded === scripts.length) resolve();
+      };
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  });
+}
+
+async function initFirebaseIfConfigured() {
+  if (firebaseInitialized) return true;
+  const raw = localStorage.getItem(STORAGE_FIREBASE_CONFIG);
+  if (!raw) return false;
+  let cfg;
+  try { cfg = JSON.parse(raw); } catch (e) { return false; }
+  try {
+    await loadFirebaseSdk();
+    firebaseApp = window.firebase.initializeApp(cfg);
+    firebaseFirestore = window.firebase.firestore();
+    firebaseStorage = window.firebase.storage();
+    firebaseInitialized = true;
+    return true;
+  } catch (e) {
+    console.warn('Firebase init failed', e);
+    return false;
+  }
+}
+
+function startCloudListener() {
+  if (!isCloudSyncEnabled()) return;
+  initFirebaseIfConfigured().then((ok) => {
+    if (!ok || !firebaseFirestore) return;
+    if (cloudListenerUnsub) return; // already listening
+    try {
+      cloudListenerUnsub = firebaseFirestore.doc('visionplus/catalog').onSnapshot((doc) => {
+        if (!doc.exists) return;
+        const data = doc.data();
+        if (!data || !Array.isArray(data.items)) return;
+        saveCatalog(data.items);
+        renderCatalog();
+        renderAdminItemList();
+        const status = document.getElementById('cloud-status');
+        if (status) status.textContent = 'Cloud: listening';
+        createToast('Catalog updated from cloud', { type: 'info', duration: 1800 });
+      }, (err) => {
+        console.error('Cloud listener error', err);
+      });
+    } catch (e) {
+      console.warn('Failed to start cloud listener', e);
+    }
+  });
+}
+
+function stopCloudListener() {
+  if (cloudListenerUnsub) {
+    try { cloudListenerUnsub(); } catch (e) { /* ignore */ }
+    cloudListenerUnsub = null;
+    const status = document.getElementById('cloud-status'); if (status) status.textContent = 'Cloud: configured';
+  }
+}
+
+function saveFirebaseConfig(raw) { localStorage.setItem(STORAGE_FIREBASE_CONFIG, raw); }
+function getFirebaseConfigRaw() { return localStorage.getItem(STORAGE_FIREBASE_CONFIG) || ''; }
+function isCloudSyncEnabled() { return localStorage.getItem(STORAGE_CLOUD_SYNC) === '1'; }
+function setCloudSyncEnabled(v) { localStorage.setItem(STORAGE_CLOUD_SYNC, v ? '1' : '0'); }
+function getBackendConfig() { return { url: localStorage.getItem(STORAGE_BACKEND_URL) || '', token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '', enabled: localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1' }; }
+function saveBackendConfig({ url, token, enabled }) { if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url); if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token); localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0'); }
+
+function updateBackendStatus(text) { const el = document.getElementById('backend-status'); if (el) el.textContent = text; }
+
+function getBackendAuthToken() { return localStorage.getItem('visionplus_backend_jwt') || ''; }
+function setBackendAuthToken(token) { if (token) localStorage.setItem('visionplus_backend_jwt', token); else localStorage.removeItem('visionplus_backend_jwt'); }
+
+async function backendLogin(email, password) {
+  const cfg = getBackendConfig();
+  if (!cfg.url) throw new Error('Backend not configured');
+  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+  if (!res.ok) throw new Error('Login failed');
+  const json = await res.json();
+  if (json.token) setBackendAuthToken(json.token);
+  return json.token;
+}
+
+async function backendTestConnection() {
+  const cfg = getBackendConfig();
+  if (!cfg.url) { updateBackendStatus('Backend: not configured'); createToast('Backend URL not set', { type: 'warning' }); return false; }
+  try {
+    const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog');
+    if (!res.ok) { updateBackendStatus('Backend: reachable (error)'); createToast('Backend reachable but returned error', { type: 'warning' }); return false; }
+    updateBackendStatus('Backend: reachable'); createToast('Backend reachable', { type: 'success' });
+    return true;
+  } catch (e) {
+    updateBackendStatus('Backend: unreachable'); createToast('Backend unreachable', { type: 'error' });
+    return false;
+  }
+}
+
+async function backendUploadImage(dataUrl) {
+  const cfg = getBackendConfig();
+  if (!cfg.url) throw new Error('Backend not configured');
+  // convert dataURL to blob
+  const blob = (function(durl) {
+    const arr = durl.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length; const u8 = new Uint8Array(n);
+    while (n--) u8[n] = bstr.charCodeAt(n);
+    return new Blob([u8], { type: mime });
+  })(dataUrl);
+  const form = new FormData();
+  form.append('file', blob, 'upload.jpg');
+  const headers = {};
+  const auth = getBackendAuthToken();
+  if (auth) headers['Authorization'] = `Bearer ${auth}`; else if (cfg.token) headers['x-admin-token'] = cfg.token;
+  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/upload', { method: 'POST', body: form, headers });
+  if (!res.ok) throw new Error('Upload failed');
+  const json = await res.json();
+  let url = json.url || '';
+  if (url && url.startsWith('/')) url = cfg.url.replace(/\/$/, '') + url;
+  return url;
+}
+
+async function backendCreateItem(item) {
+  const cfg = getBackendConfig();
+  const headers = { 'Content-Type': 'application/json' };
+  const auth = getBackendAuthToken();
+  if (auth) headers['Authorization'] = `Bearer ${auth}`; else if (cfg.token) headers['x-admin-token'] = cfg.token;
+  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog', { method: 'POST', headers, body: JSON.stringify(item) });
+  if (!res.ok) throw new Error('Create item failed');
+  return await res.json();
+}
+
+async function backendFetchCatalog() {
+  const cfg = getBackendConfig();
+  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog');
+  if (!res.ok) throw new Error('Fetch catalog failed');
+  const items = await res.json();
+  if (Array.isArray(items)) {
+    return items.map(it => {
+      if (it.image && it.image.startsWith('/')) it.image = cfg.url.replace(/\/$/, '') + it.image;
+      return it;
+    });
+  }
+  return items;
+}
+
+async function loadCatalogFromBackendIfConfigured() {
+  const cfg = getBackendConfig();
+  if (!cfg.enabled || !cfg.url) return false;
+  try {
+    const items = await backendFetchCatalog();
+    if (Array.isArray(items)) {
+      saveCatalog(items);
+      renderCatalog();
+      renderAdminItemList();
+      updateBackendStatus('Backend: loaded');
+      createToast('Loaded shared catalog from backend', { type: 'success', duration: 1800 });
+      return true;
+    }
+  } catch (e) {
+    console.warn('Failed to load backend catalog', e);
+    updateBackendStatus('Backend: load failed');
+  }
+  return false;
+}
+
+function startBackendPoller(interval = 5000) {
+  stopBackendPoller();
+  backendPoller = setInterval(async () => {
+    try {
+      const items = await backendFetchCatalog();
+      if (Array.isArray(items)) {
+        // naive replacement
+        saveCatalog(items);
+        renderCatalog();
+        renderAdminItemList();
+      }
+    } catch (e) {
+      // ignore polling errors silently
+    }
+  }, interval);
+  updateBackendStatus('Backend: polling');
+}
+
+function stopBackendPoller() { if (backendPoller) { clearInterval(backendPoller); backendPoller = null; updateBackendStatus('Backend: configured'); } }
+
+// Realtime via Socket.IO (preferred)
+async function loadSocketIoClient() {
+  if (window.io) return;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+    s.onload = () => resolve();
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function startBackendRealtime() {
+  stopBackendPoller();
+  if (backendSocket) return;
+  const cfg = getBackendConfig();
+  if (!cfg.url) return;
+  try {
+    await loadSocketIoClient();
+    backendSocket = window.io(cfg.url, { transports: ['websocket'] });
+    backendSocket.on('connect', () => {
+      updateBackendStatus('Backend: realtime connected');
+      createToast('Realtime backend connected', { type: 'success' });
+    });
+    backendSocket.on('catalog-updated', (payload) => {
+      if (!payload || !Array.isArray(payload.items)) return;
+      saveCatalog(payload.items);
+      renderCatalog();
+      renderAdminItemList();
+      const status = document.getElementById('cloud-status'); if (status) status.textContent = 'Backend: realtime';
+    });
+    backendSocket.on('disconnect', () => {
+      updateBackendStatus('Backend: disconnected');
+      backendSocket = null;
+      // fallback to poller
+      startBackendPoller();
+    });
+  } catch (e) {
+    console.warn('Realtime connection failed, falling back to SSE/poller', e);
+    startBackendSSE();
+  }
+}
+
+function stopBackendRealtime() {
+  if (backendSocket) {
+    try { backendSocket.disconnect(); } catch (e) {}
+    backendSocket = null;
+  }
+}
+
+let backendEventSource = null;
+function startBackendSSE() {
+  stopBackendRealtime();
+  stopBackendPoller();
+  if (backendEventSource) return;
+  const cfg = getBackendConfig();
+  if (!cfg.url) return startBackendPoller();
+  try {
+    backendEventSource = new EventSource(cfg.url.replace(/\/$/, '') + '/api/sse');
+    backendEventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload && Array.isArray(payload.items)) {
+          saveCatalog(payload.items);
+          renderCatalog();
+          renderAdminItemList();
+          updateBackendStatus('Backend: sse');
+        }
+      } catch (err) { /* ignore parse errors */ }
+    };
+    backendEventSource.onerror = (err) => {
+      console.warn('SSE error, falling back to poller', err);
+      stopBackendSSE();
+      startBackendPoller();
+    };
+    updateBackendStatus('Backend: sse');
+  } catch (e) {
+    startBackendPoller();
+  }
+}
+
+function stopBackendSSE() { if (backendEventSource) { try { backendEventSource.close(); } catch (e) {} backendEventSource = null; } }
+
+function dataURLtoBlob(dataurl) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new Blob([u8arr], { type: mime });
+}
+
+// Firestore/Storage rule templates for admin guidance
+const RULES = {
+  firestore_secure: "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /visionplus/{document=**} {\n      allow read: if true;\n      allow write: if request.auth != null;\n    }\n  }\n}",
+  firestore_testing: "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /visionplus/{document=**} {\n      allow read, write: if true;\n    }\n  }\n}",
+  storage_secure: "rules_version = '2';\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /visionplus/{allPaths=**} {\n      allow read: if true;\n      allow write: if request.auth != null;\n    }\n  }\n}",
+  storage_testing: "rules_version = '2';\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /{allPaths=**} {\n      allow read, write: if true;\n    }\n  }\n}"
+};
+
+function copyToClipboard(text) {
+  if (!text) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); resolve(); } catch (e) { reject(e); }
+    ta.remove();
+  });
+}
+
+async function uploadDataUrlToStorage(dataUrl, path) {
+  if (!firebaseInitialized || !firebaseStorage) throw new Error('Firebase not initialized');
+  const blob = dataURLtoBlob(dataUrl);
+  const ref = firebaseStorage.ref().child(path);
+  const snap = await ref.put(blob);
+  return await snap.ref.getDownloadURL();
+}
+
+async function syncCatalogToCloud() {
+  const ok = await initFirebaseIfConfigured();
+  if (!ok) {
+    createToast('Firebase not configured or invalid config', { type: 'error' });
+    return;
+  }
+  try {
+    // upload images that are data URLs
+    const items = JSON.parse(JSON.stringify(catalogItems));
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.image && it.image.startsWith('data:')) {
+        const ext = it.image.substring(5, it.image.indexOf(';')).split('/')[1] || 'jpg';
+        const path = `visionplus/catalog/${it.id}.${ext}`;
+        try {
+          const url = await uploadDataUrlToStorage(it.image, path);
+          it.image = url;
+        } catch (e) {
+          console.warn('Upload failed for', it.id, e);
+        }
+      }
+    }
+    // save to Firestore as single doc
+    await firebaseFirestore.doc('visionplus/catalog').set({ items, updatedAt: Date.now() });
+    createToast('Catalog synced to cloud', { type: 'success' });
+  } catch (e) {
+    console.error(e);
+    createToast('Cloud sync failed', { type: 'error' });
+  }
+}
+
+async function loadCatalogFromCloud() {
+  const ok = await initFirebaseIfConfigured();
+  if (!ok) {
+    createToast('Firebase not configured or invalid config', { type: 'error' });
+    return;
+  }
+  try {
+    const doc = await firebaseFirestore.doc('visionplus/catalog').get();
+    if (!doc.exists) { createToast('No catalog found in cloud', { type: 'warning' }); return; }
+    const data = doc.data();
+    if (!data || !Array.isArray(data.items)) { createToast('Invalid cloud catalog', { type: 'error' }); return; }
+    const confirmed = confirm('Load catalog from cloud and replace local catalog? This will overwrite local changes.');
+    if (!confirmed) return;
+    saveCatalog(data.items);
+    renderCatalog();
+    renderAdminItemList();
+    createToast('Catalog loaded from cloud', { type: 'success' });
+  } catch (e) {
+    console.error(e);
+    createToast('Failed to load catalog from cloud', { type: 'error' });
+  }
+}
+
+function getUsers() { try { const raw = localStorage.getItem(STORAGE_USERS); return raw ? JSON.parse(raw) : []; } catch (e) { return []; } }
+function saveUsers(u) { localStorage.setItem(STORAGE_USERS, JSON.stringify(u)); }
+
+function registerCustomer(name, email, password, phone='') {
+  const users = getUsers();
+  if (users.find(u => u.email === email)) return { ok: false, message: 'Email already registered' };
+  const user = { name, email, password, phone };
+  users.push(user); saveUsers(users);
+  sessionStorage.setItem(SESSION_CUSTOMER, JSON.stringify(user));
+  return { ok: true, user };
+}
+
+function loginCustomer(email, password) {
+  const users = getUsers();
+  const u = users.find(x => x.email === email && x.password === password);
+  if (!u) return { ok: false };
+  sessionStorage.setItem(SESSION_CUSTOMER, JSON.stringify(u));
+  return { ok: true, user: u };
+}
+
+function logoutCustomer() { sessionStorage.removeItem(SESSION_CUSTOMER); }
+
+function getCurrentCustomer() { try { const raw = sessionStorage.getItem(SESSION_CUSTOMER); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+function isCustomerLoggedIn() { return !!getCurrentCustomer(); }
+
+
+function setAdminLoggedIn(val) {
+  if (val) sessionStorage.setItem('visionplus_admin_logged_in', '1'); else sessionStorage.removeItem('visionplus_admin_logged_in');
+}
+
+function isAdminLoggedIn() {
+  return sessionStorage.getItem('visionplus_admin_logged_in') === '1';
+}
+
+const appointmentForm = document.getElementById('appointment-form');
+const formMessage = document.getElementById('form-message');
+const whatsappDisplay = document.getElementById('whatsapp-display');
+const framesGrid = document.getElementById('frames-grid');
+const casesGrid = document.getElementById('cases-grid');
+const contactLensesGrid = document.getElementById('contact-lenses-grid');
+const adminLoginCard = document.getElementById('admin-login-card');
+const adminDashboard = document.getElementById('admin-dashboard');
+const adminLoginForm = document.getElementById('admin-login-form');
+const adminSettingsForm = document.getElementById('admin-settings-form');
+const adminAddItemForm = document.getElementById('admin-add-item-form');
+const adminRemoveCategoryForm = document.getElementById('admin-remove-category-form');
+const adminLogoutButton = document.getElementById('logout-button');
+const adminItemList = document.getElementById('admin-item-list');
+const adminWhatsappInput = document.getElementById('admin-whatsapp-number');
+const adminItemUploadButton = document.getElementById('admin-item-upload-button');
+const adminItemImagePreview = document.getElementById('admin-item-image-preview');
+const adminRemoveCategorySelect = document.getElementById('admin-remove-category');
+const adminRemoveCategoryPreview = document.getElementById('admin-remove-category-items');
+const adminRemoveCategoryMessage = document.getElementById('admin-remove-category-message');
+const adminSettingsMessage = document.getElementById('admin-settings-message');
+const adminAddMessage = document.getElementById('admin-add-message');
+const adminLoginError = document.getElementById('admin-login-error');
+const adminForgotLink = document.getElementById('admin-forgot-link');
+const adminForgotForm = document.getElementById('admin-forgot-form');
+const adminForgotEmail = document.getElementById('admin-forgot-email');
+const adminForgotMessage = document.getElementById('admin-forgot-message');
+const adminForgotError = document.getElementById('admin-forgot-error');
+const adminResetForm = document.getElementById('admin-reset-form');
+const adminResetPassword = document.getElementById('admin-reset-password');
+const adminResetConfirm = document.getElementById('admin-reset-confirm');
+const adminResetTokenInput = document.getElementById('admin-reset-token');
+const adminResetMessage = document.getElementById('admin-reset-message');
+const adminResetError = document.getElementById('admin-reset-error');
+const adminNavLink = document.getElementById('admin-nav-link');
+const cartNavLink = document.getElementById('cart-nav-link');
+const cartContents = document.getElementById('cart-contents');
+const cartActions = document.getElementById('cart-actions');
+const currentPage = window.location.pathname.split('/').pop() || '';
+
+const defaultCatalog = [
+  {
+    id: 'frame-1',
+    category: 'frames',
+    title: 'Classic Rectangle Frames',
+    description: 'Timeless shape, lightweight fit, and polish-ready design for everyday wear.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.35.jpeg',
+  },
+  {
+    id: 'frame-2',
+    category: 'frames',
+    title: 'Modern Round Frames',
+    description: 'Bold, fashionable, and perfect for a statement look with clear prescription lenses.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.46.jpeg',
+  },
+  {
+    id: 'frame-3',
+    category: 'frames',
+    title: 'Lightweight Metal Frames',
+    description: 'Sleek metal design with adjustable nose pads and a refined finish.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.56.jpeg',
+  },
+  {
+    id: 'case-1',
+    category: 'cases',
+    title: 'Protective Hard Case',
+    description: 'Sturdy, impact-resistant case with soft interior for safe storage.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.34.jpeg',
+  },
+  {
+    id: 'case-2',
+    category: 'cases',
+    title: 'Soft Travel Pouch',
+    description: 'Light and compact, ideal for a purse or backpack on the go.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.47.jpeg',
+  },
+  {
+    id: 'case-3',
+    category: 'cases',
+    title: 'Luxury Designer Case',
+    description: 'Premium finish with a secure magnetic closure and elegant style.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.55.jpeg',
+  },
+  {
+    id: 'lens-1',
+    category: 'contact-lenses',
+    title: 'Daily Comfort Contact Lenses',
+    description: 'Soft daily disposable lenses designed for all-day comfort and clear vision.',
+    image: 'images/WhatsApp Image 2026-07-23 at 22.22.53.jpeg',
+    price: 120.00,
+  },
+  {
+    id: 'lens-2',
+    category: 'contact-lenses',
+    title: 'Monthly Performance Contact Lenses',
+    description: 'Reliable monthly lenses with excellent breathability and a comfortable fit.',
+    image: 'images/back3.jpeg',
+    price: 200.00,
+  },
+];
+
+let catalogItems = loadCatalog();
+let currentWhatsApp = loadWhatsAppNumber();
+
+function loadCatalog() {
+  try {
+    const saved = localStorage.getItem(STORAGE_CATALOG);
+    return saved ? JSON.parse(saved) : defaultCatalog;
+  } catch (error) {
+    console.warn('Unable to parse saved catalog:', error);
+    return defaultCatalog;
+  }
+}
+
+function saveCatalog(items) {
+  catalogItems = items;
+  localStorage.setItem(STORAGE_CATALOG, JSON.stringify(items));
+}
+
+function createToast(message, options = {}) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${options.type || 'info'}`.trim();
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast-hidden');
+    setTimeout(() => toast.remove(), 200);
+  }, options.duration || 3200);
+}
+
+function loadWhatsAppNumber() {
+  const saved = localStorage.getItem(STORAGE_WHATSAPP);
+  return saved || DEFAULT_WHATSAPP;
+}
+
+function saveWhatsAppNumber(number) {
+  currentWhatsApp = number;
+  localStorage.setItem(STORAGE_WHATSAPP, number);
+}
+
+function normalizeWhatsApp(number) {
+  return number.replace(/[^+0-9]/g, '');
+}
+
+function updateWhatsAppDisplay() {
+  if (whatsappDisplay) {
+    whatsappDisplay.textContent = currentWhatsApp;
+  }
+  if (adminWhatsappInput) {
+    adminWhatsappInput.value = currentWhatsApp;
+  }
+}
+
+function findCatalogItem(itemId) {
+  return catalogItems.find((item) => item.id === itemId);
+}
+
+function updateNavLinks() {
+  if (adminNavLink) {
+    // Show admin link for visitors and admins, but hide for signed-in customers who are not admins
+    const showAdminLink = isAdminLoggedIn() || !isCustomerLoggedIn();
+    adminNavLink.style.display = showAdminLink ? 'inline-flex' : 'none';
+  }
+  if (cartNavLink) {
+    const loggedIn = isCustomerLoggedIn();
+    cartNavLink.style.display = loggedIn ? 'inline-flex' : 'none';
+    cartNavLink.textContent = loggedIn ? `Cart (${getCartCount()})` : 'Cart';
+  }
+}
+
+function getCartDetails() {
+  return loadCart().map((cartItem) => {
+    const catalogItem = findCatalogItem(cartItem.id) || {};
+    return {
+      id: cartItem.id,
+      qty: cartItem.qty,
+      title: catalogItem.title || 'Unknown item',
+      description: catalogItem.description || '',
+      image: catalogItem.image || '',
+      price: Number(catalogItem.price || 0),
+    };
+  });
+}
+
+async function buildOrderDetailsUrl(payload) {
+  const backendCfg = getBackendConfig();
+  // If backend is configured, POST the order and get a short URL
+  if (backendCfg.enabled && backendCfg.url) {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const auth = getBackendAuthToken();
+      if (auth) headers['Authorization'] = `Bearer ${auth}`;
+      else if (backendCfg.token) headers['x-admin-token'] = backendCfg.token;
+      const res = await fetch(backendCfg.url.replace(/\/$/, '') + '/api/orders', { method: 'POST', headers, body: JSON.stringify(payload) });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.url) return json.url;
+        if (json.id) return backendCfg.url.replace(/\/$/, '') + '/orders/' + json.id;
+      }
+    } catch (e) {
+      console.warn('Failed to create backend order link', e);
+    }
+  }
+  // Fallback to long client-side order page with encoded cart
+  const orderUrl = new URL('order.html', window.location.href);
+  orderUrl.searchParams.set('cart', JSON.stringify(payload));
+  return orderUrl.href;
+}
+
+function buildWhatsAppOrderMessage(items, orderLink) {
+  const user = getCurrentCustomer();
+  const lines = [];
+  lines.push(`Order from ${user?.name || 'Customer'} (${user?.email || 'no email'})`);
+  if (user?.phone) {
+    lines.push(`Phone: ${user.phone}`);
+  }
+  lines.push('Items:');
+  items.forEach((item) => {
+    lines.push(`- ${item.title} x${item.qty} @ ZMW ${item.price.toFixed(2)} = ZMW ${(item.price * item.qty).toFixed(2)}`);
+  });
+  const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  lines.push(`Total: ZMW ${total.toFixed(2)}`);
+  if (orderLink) {
+    lines.push('Order details:');
+    lines.push(orderLink);
+  }
+  return lines.join('\n');
+}
+
+async function sendCartToWhatsApp() {
+  const user = getCurrentCustomer();
+  if (!user) {
+    createAccountModal();
+    openAccountModal();
+    return;
+  }
+  const items = getCartDetails();
+  if (!items.length) {
+    createToast('Add items to cart before sending an order.', { type: 'warning' });
+    return;
+  }
+  const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const payload = { customer: user, items, total };
+  let orderLink = '';
+  try { orderLink = await buildOrderDetailsUrl(payload); } catch (e) { orderLink = ''; }
+  const text = encodeURIComponent(buildWhatsAppOrderMessage(items, orderLink));
+  const number = normalizeWhatsApp(currentWhatsApp).replace('+', '');
+  const whatsappUrl = `https://wa.me/${number}?text=${text}`;
+  window.open(whatsappUrl, '_blank');
+}
+
+function reviewOrderSummary() {
+  const user = getCurrentCustomer();
+  if (!user) {
+    createAccountModal();
+    openAccountModal();
+    return;
+  }
+  const items = getCartDetails();
+  if (!items.length) {
+    createToast('Add items to cart before reviewing your order.', { type: 'warning' });
+    return;
+  }
+  const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const payload = { customer: user, items, total };
+  window.location.href = `order.html?cart=${encodeURIComponent(JSON.stringify(payload))}`;
+}
+
+function renderCartPage() {
+  if (!cartContents) return;
+  const items = getCartDetails();
+  if (!items.length) {
+    cartContents.innerHTML = '<div class="cart-empty"><p>Your cart is empty. Log in and add products to begin.</p></div>';
+    if (cartActions) cartActions.innerHTML = '';
+    return;
+  }
+  cartContents.innerHTML = items.map((item) => `
+    <div class="cart-item" data-cart-id="${item.id}">
+      <img class="cart-thumb" loading="lazy" src="${item.image}" alt="${item.title}" />
+      <div class="cart-item-details">
+        <h4>${item.title}</h4>
+        <p>${item.description}</p>
+        <p class="price">ZMW ${item.price.toFixed(2)}</p>
+      </div>
+      <div class="cart-item-actions">
+        <div class="cart-row">
+          <button class="button-secondary cart-decrease" type="button">−</button>
+          <span>${item.qty}</span>
+          <button class="button-secondary cart-increase" type="button">+</button>
+        </div>
+        <button class="button danger-button cart-remove" type="button">Remove</button>
+      </div>
+    </div>
+  `).join('');
+
+  if (cartActions) {
+    const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+    cartActions.innerHTML = `
+      <div class="cart-summary">
+        <div>
+          <strong>${items.length} item${items.length === 1 ? '' : 's'}</strong>
+          <div>Total: ZMW ${total.toFixed(2)}</div>
+        </div>
+        <div class="cart-actions-buttons">
+          <button id="clear-cart-button" class="button-secondary" type="button">Clear cart</button>
+          <button id="review-order-button" class="button-secondary" type="button">Review summary</button>
+          <button id="send-whatsapp-order" class="button" type="button">Send order via WhatsApp</button>
+        </div>
+      </div>
+    `;
+  }
+
+  cartContents.querySelectorAll('.cart-increase').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.closest('[data-cart-id]')?.getAttribute('data-cart-id');
+      if (!itemId) return;
+      const cart = loadCart();
+      const entry = cart.find((c) => c.id === itemId);
+      if (entry) entry.qty += 1;
+      saveCart(cart);
+      updateCartButton();
+      updateNavLinks();
+      renderCartPage();
+    });
+  });
+
+  cartContents.querySelectorAll('.cart-decrease').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.closest('[data-cart-id]')?.getAttribute('data-cart-id');
+      if (!itemId) return;
+      const cart = loadCart();
+      const entry = cart.find((c) => c.id === itemId);
+      if (entry) {
+        entry.qty = Math.max(1, entry.qty - 1);
+        saveCart(cart);
+        updateCartButton();
+        updateNavLinks();
+        renderCartPage();
+      }
+    });
+  });
+
+  cartContents.querySelectorAll('.cart-remove').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.closest('[data-cart-id]')?.getAttribute('data-cart-id');
+      if (!itemId) return;
+      const cart = loadCart().filter((c) => c.id !== itemId);
+      saveCart(cart);
+      updateCartButton();
+      updateNavLinks();
+      renderCartPage();
+    });
+  });
+
+  if (cartActions) {
+    const clearButton = document.getElementById('clear-cart-button');
+    const reviewButton = document.getElementById('review-order-button');
+    const sendButton = document.getElementById('send-whatsapp-order');
+    clearButton?.addEventListener('click', () => {
+      saveCart([]);
+      updateCartButton();
+      updateNavLinks();
+      renderCartPage();
+    });
+    reviewButton?.addEventListener('click', reviewOrderSummary);
+    sendButton?.addEventListener('click', sendCartToWhatsApp);
+  }
+}
+
+function renderCatalog() {
+  if (framesGrid) framesGrid.innerHTML = '';
+  if (casesGrid) casesGrid.innerHTML = '';
+  if (contactLensesGrid) contactLensesGrid.innerHTML = '';
+  catalogItems.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <img class="card-image" loading="lazy" src="${item.image}" alt="${item.title}" />
+      <h4>${item.title}</h4>
+      <p>${item.description}</p>
+      <div class="product-meta">
+        <span class="price">ZMW ${Number(item.price || 0).toFixed(2)}</span>
+      </div>
+      <div class="add-to-cart">
+        <input type="number" min="1" value="1" class="qty-input" data-item-id="${item.id}" />
+        <button class="button add-cart-button" data-add-id="${item.id}">Add to cart</button>
+      </div>
+    `;
+
+    if (item.category === 'frames' && framesGrid) framesGrid.appendChild(card);
+    if (item.category === 'cases' && casesGrid) casesGrid.appendChild(card);
+    if (item.category === 'contact-lenses' && contactLensesGrid) contactLensesGrid.appendChild(card);
+
+    const addBtn = card.querySelector('[data-add-id]');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const qtyInput = card.querySelector('.qty-input');
+        const qty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
+        addToCart(item.id, qty);
+      });
+    }
+  });
+}
+
+// --- Cart helpers ---
+function loadCart() {
+  try { const raw = localStorage.getItem(STORAGE_CART); return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
+}
+
+function saveCart(cart) { localStorage.setItem(STORAGE_CART, JSON.stringify(cart)); }
+
+function getCartCount() { return loadCart().reduce((s, it) => s + (it.qty || 0), 0); }
+
+function addToCart(itemId, qty = 1) {
+  if (!isCustomerLoggedIn()) {
+    // prompt customer to login/register
+    const btn = document.getElementById('account-button');
+    if (btn) btn.click();
+    alert('Please log in or register to add items to cart.');
+    return;
+  }
+  const item = catalogItems.find(i => i.id === itemId);
+  if (!item) return;
+  const cart = loadCart();
+  const existing = cart.find(c => c.id === itemId);
+  if (existing) existing.qty += qty; else cart.push({ id: itemId, qty });
+  saveCart(cart);
+  updateCartButton();
+  alert('Added to cart');
+}
+
+function updateCartButton() {
+  const btn = document.getElementById('floating-cart-button');
+  const count = getCartCount();
+  if (btn) {
+    btn.textContent = `Cart (${count})`;
+  }
+  if (cartNavLink) {
+    cartNavLink.style.display = isCustomerLoggedIn() ? 'inline-flex' : 'none';
+    cartNavLink.textContent = isCustomerLoggedIn() ? `Cart (${count})` : 'Cart';
+  }
+}
+
+function createAccountModal() {
+  if (document.getElementById('account-modal')) return;
+  const div = document.createElement('div');
+  div.id = 'account-modal';
+  div.className = 'modal hidden';
+  div.innerHTML = `
+    <div class="modal-content">
+      <button type="button" class="modal-close" aria-label="Close account dialog">×</button>
+      <h3 id="account-modal-title">Account access</h3>
+      <p class="modal-subtitle">Log in or register to start shopping, manage your cart, and book appointments.</p>
+      <div id="account-forms">
+        <form id="customer-login-form" class="account-card">
+          <h4>Log in</h4>
+          <div class="input-group"><label for="cust-login-email">Email</label><input id="cust-login-email" type="email" required /></div>
+          <div class="input-group password-toggle-wrapper"><label for="cust-login-password">Password</label><input id="cust-login-password" type="password" required /><button type="button" id="toggle-login-password" class="password-toggle">Show</button></div>
+          <div class="form-actions"><button class="button" type="submit">Log in</button><button type="button" id="switch-to-register" class="button-secondary">Register</button></div>
+          <p id="customer-login-msg" style="display:none;color:#c53030;margin:0;font-weight:600;"></p>
+        </form>
+        <form id="customer-register-form" class="account-card" style="display:none">
+          <h4>Create account</h4>
+          <div class="input-group"><label for="cust-name">Full name</label><input id="cust-name" type="text" required /></div>
+          <div class="input-group"><label for="cust-email">Email</label><input id="cust-email" type="email" required /></div>
+          <div class="input-group"><label for="cust-phone">Phone</label><input id="cust-phone" type="text" /></div>
+          <div class="input-group password-toggle-wrapper"><label for="cust-password">Password</label><input id="cust-password" type="password" required /><button type="button" id="toggle-register-password" class="password-toggle">Show</button></div>
+          <div class="form-actions"><button class="button" type="submit">Register</button><button type="button" id="switch-to-login" class="button-secondary">Back to log in</button></div>
+          <p id="customer-register-msg" style="display:none;color:#0f4c81;margin:0;font-weight:600;"></p>
+        </form>
+      </div>
+      <div id="account-info" class="account-card" style="display:none">
+        <h4>Signed in</h4>
+        <div id="account-user"></div>
+        <div class="form-actions"><button id="customer-logout" class="button-secondary">Logout</button><button id="close-account-modal" class="button">Close</button></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(div);
+
+  // wiring
+  const loginForm = document.getElementById('customer-login-form');
+  const regForm = document.getElementById('customer-register-form');
+  const switchToReg = document.getElementById('switch-to-register');
+  const switchToLogin = document.getElementById('switch-to-login');
+  const accountInfo = document.getElementById('account-info');
+  const accountForms = document.getElementById('account-forms');
+  const closeBtn = document.getElementById('close-account-modal');
+  const modalClose = document.querySelector('#account-modal .modal-close');
+  const logoutBtn = document.getElementById('customer-logout');
+
+  switchToReg.addEventListener('click', () => { loginForm.style.display = 'none'; regForm.style.display = 'block'; });
+  switchToLogin.addEventListener('click', () => { regForm.style.display = 'none'; loginForm.style.display = 'block'; });
+  closeBtn.addEventListener('click', closeAccountModal);
+  modalClose?.addEventListener('click', closeAccountModal);
+  logoutBtn.addEventListener('click', () => { logoutCustomer(); updateAccountDisplay(); closeAccountModal(); });
+
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('cust-login-email').value.trim();
+    const pwd = document.getElementById('cust-login-password').value;
+    const res = loginCustomer(email, pwd);
+    if (!res.ok) { document.getElementById('customer-login-msg').textContent = 'Invalid credentials'; document.getElementById('customer-login-msg').style.display = 'block'; return; }
+    document.getElementById('customer-login-msg').style.display = 'none';
+    updateAccountDisplay();
+    closeAccountModal();
+  });
+
+  regForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('cust-name').value.trim();
+    const email = document.getElementById('cust-email').value.trim();
+    const phone = document.getElementById('cust-phone').value.trim();
+    const pwd = document.getElementById('cust-password').value;
+    const res = registerCustomer(name, email, pwd, phone);
+    if (!res.ok) { document.getElementById('customer-register-msg').textContent = res.message; document.getElementById('customer-register-msg').style.display = 'block'; return; }
+    document.getElementById('customer-register-msg').textContent = 'Account created'; document.getElementById('customer-register-msg').style.display = 'block';
+    updateAccountDisplay();
+    setTimeout(() => closeAccountModal(), 900);
+  });
+
+  const toggleLoginPassword = document.getElementById('toggle-login-password');
+  const toggleRegisterPassword = document.getElementById('toggle-register-password');
+
+  toggleLoginPassword?.addEventListener('click', () => {
+    const input = document.getElementById('cust-login-password');
+    if (!input) return;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    toggleLoginPassword.textContent = isPassword ? 'Hide' : 'Show';
+  });
+
+  toggleRegisterPassword?.addEventListener('click', () => {
+    const input = document.getElementById('cust-password');
+    if (!input) return;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    toggleRegisterPassword.textContent = isPassword ? 'Hide' : 'Show';
+  });
+}
+
+function openAccountModal() { const m = document.getElementById('account-modal'); if (!m) return; m.classList.remove('hidden'); }
+function closeAccountModal() { const m = document.getElementById('account-modal'); if (!m) return; m.classList.add('hidden'); }
+
+function updateAccountDisplay() {
+  const btns = document.querySelectorAll('#account-button');
+  const user = getCurrentCustomer();
+  btns.forEach(b => {
+    b.innerHTML = '<span class="account-icon">👤</span>';
+    b.title = user ? `Signed in as ${user.name || user.email}` : 'Account';
+  });
+  const accountInfo = document.getElementById('account-info');
+  const accountForms = document.getElementById('account-forms');
+  if (accountInfo && accountForms) {
+    if (user) {
+      accountForms.style.display = 'none';
+      accountInfo.style.display = 'block';
+      document.getElementById('account-user').textContent = `${user.name || ''} (${user.email})`;
+    } else {
+      accountForms.style.display = 'grid';
+      accountInfo.style.display = 'none';
+    }
+  }
+  updateNavLinks();
+}
+
+async function backendDeleteItem(itemId) {
+  const cfg = getBackendConfig();
+  const headers = {};
+  const auth = getBackendAuthToken();
+  if (auth) headers['Authorization'] = `Bearer ${auth}`;
+  else if (cfg.token) headers['x-admin-token'] = cfg.token;
+  const res = await fetch(cfg.url.replace(/\/$/, '') + `/api/catalog/${encodeURIComponent(itemId)}`, { method: 'DELETE', headers });
+  if (!res.ok) throw new Error('Backend delete failed');
+  return await res.json();
+}
+
+async function backendReplaceCatalog(items) {
+  const cfg = getBackendConfig();
+  const headers = { 'Content-Type': 'application/json' };
+  const auth = getBackendAuthToken();
+  if (auth) headers['Authorization'] = `Bearer ${auth}`;
+  else if (cfg.token) headers['x-admin-token'] = cfg.token;
+  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog/replace', { method: 'POST', headers, body: JSON.stringify(items) });
+  if (!res.ok) throw new Error('Backend replace failed');
+  return await res.json();
+}
+
+async function deleteCatalogItem(itemId, itemTitle) {
+  const confirmation = confirm(`Delete "${itemTitle}" from the catalog? This action cannot be undone.`);
+  if (!confirmation) return;
+
+  const backendCfg = getBackendConfig();
+  if (backendCfg.enabled && backendCfg.url) {
+    try {
+      await backendDeleteItem(itemId);
+      await loadCatalogFromBackendIfConfigured();
+      createToast(`Removed “${itemTitle}” from the backend catalog.`, { type: 'success' });
+      return;
+    } catch (e) {
+      console.warn('Backend delete failed, falling back to local delete', e);
+      createToast('Backend delete failed, deleted locally only.', { type: 'warning' });
+    }
+  }
+
+  const updatedCatalog = catalogItems.filter((product) => product.id !== itemId);
+  saveCatalog(updatedCatalog);
+  renderCatalog();
+  renderAdminItemList();
+  createToast(`Removed “${itemTitle}” from the catalog.`, { type: 'success' });
+}
+
+function renderAdminItemList() {
+  if (!adminItemList) return;
+  adminItemList.innerHTML = '';
+
+  catalogItems.forEach((item) => {
+    const entry = document.createElement('div');
+    entry.className = 'admin-item-entry';
+    entry.innerHTML = `
+      <div class="admin-item-header">
+        <div>
+          <strong>${item.title}</strong>
+          <p style="margin:0.35rem 0 0; color: var(--muted);">${item.category}</p>
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:center">
+          <button class="button" type="button" data-edit-id="${item.id}">Edit</button>
+          <button class="button danger-button" type="button" data-delete-id="${item.id}">Delete</button>
+        </div>
+      </div>
+      <p style="margin:0.75rem 0 0; color: var(--text);">${item.description}</p>
+      ${item.image ? `<img class="card-image" loading="lazy" src="${item.image}" alt="${item.title}" />` : ''}
+    `;
+    adminItemList.appendChild(entry);
+
+    const deleteButton = entry.querySelector('[data-delete-id]');
+    if (deleteButton) {
+      deleteButton.addEventListener('click', async () => deleteCatalogItem(item.id, item.title));
+    }
+    const editButton = entry.querySelector('[data-edit-id]');
+    if (editButton) {
+      editButton.addEventListener('click', () => startEditItem(item.id));
+    }
+  });
+}
+
+function startEditItem(itemId) {
+  const item = (catalogItems || []).find(i => i.id === itemId);
+  if (!item) return;
+  // populate add form for editing
+  const editIdField = document.getElementById('admin-edit-id');
+  const categoryField = document.getElementById('admin-item-category');
+  const titleField = document.getElementById('admin-item-title');
+  const descField = document.getElementById('admin-item-description');
+  const priceField = document.getElementById('admin-item-price');
+  const imagePreview = document.getElementById('admin-item-image-preview');
+  if (editIdField) editIdField.value = item.id;
+  if (categoryField) categoryField.value = item.category || 'frames';
+  if (titleField) titleField.value = item.title || '';
+  if (descField) descField.value = item.description || '';
+  if (priceField) priceField.value = item.price || 0;
+  if (imagePreview && item.image) {
+    imagePreview.src = item.image;
+    imagePreview.style.display = 'block';
+  }
+  // scroll to form
+  const form = document.getElementById('admin-add-item-form');
+  if (form) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // change button text to indicate update
+  const submitBtn = form?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.textContent = 'Save changes';
+}
+
+function showAdminDashboard() {
+  if (adminLoginCard) adminLoginCard.style.display = 'none';
+  if (adminDashboard) adminDashboard.classList.remove('hidden');
+}
+
+function hideAdminDashboard() {
+  if (adminLoginCard) adminLoginCard.style.display = 'block';
+  if (adminDashboard) adminDashboard.classList.add('hidden');
+}
+
+function getQueryParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function getResetBackendUrl() {
+  const cfg = getBackendConfig();
+  return cfg.url ? cfg.url.replace(/\/$/, '') : BACKEND_DEFAULT_URL;
+}
+
+function setAdminFeedback(element, message, isError) {
+  if (!element) return;
+  element.textContent = message || '';
+  element.style.display = message ? 'block' : 'none';
+  element.style.color = isError ? '#c53030' : '#0f4c81';
+}
+
+function showAdminForgotPasswordSection(show) {
+  const section = document.getElementById('admin-forgot-section');
+  if (!section) return;
+  section.classList.toggle('hidden', !show);
+}
+
+function showAdminResetSection(token) {
+  const section = document.getElementById('admin-reset-section');
+  if (!section) return;
+  if (token && adminResetTokenInput) adminResetTokenInput.value = token;
+  section.classList.remove('hidden');
+  showAdminForgotPasswordSection(false);
+  if (adminLoginCard) adminLoginCard.style.display = 'none';
+}
+
+async function handleAdminForgotPassword(event) {
+  event.preventDefault();
+  if (!adminForgotEmail) return;
+  const email = adminForgotEmail.value.trim();
+  if (!email) {
+    setAdminFeedback(adminForgotError, 'Please enter the admin email.', true);
+    setAdminFeedback(adminForgotMessage, '', false);
+    return;
+  }
+
+  const backendUrl = getResetBackendUrl();
+  try {
+    const res = await fetch(`${backendUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to request password reset');
+    }
+    const msg = data.emailSent
+      ? 'Reset email sent. Check your inbox and follow the link.'
+      : `Reset link ready. Open this URL: ${data.resetUrl}`;
+    setAdminFeedback(adminForgotMessage, msg, false);
+    setAdminFeedback(adminForgotError, '', false);
+  } catch (err) {
+    console.warn('Forgot password failed', err);
+    setAdminFeedback(adminForgotError, err.message || 'Failed to request reset link.', true);
+    setAdminFeedback(adminForgotMessage, '', false);
+  }
+}
+
+async function handleAdminResetPassword(event) {
+  event.preventDefault();
+  if (!adminResetPassword || !adminResetConfirm || !adminResetTokenInput) return;
+
+  const password = adminResetPassword.value;
+  const confirm = adminResetConfirm.value;
+  const token = adminResetTokenInput.value || getQueryParam('resetToken');
+
+  if (!password || !confirm) {
+    setAdminFeedback(adminResetError, 'Please enter and confirm your new password.', true);
+    setAdminFeedback(adminResetMessage, '', false);
+    return;
+  }
+  if (password !== confirm) {
+    setAdminFeedback(adminResetError, 'Passwords do not match.', true);
+    setAdminFeedback(adminResetMessage, '', false);
+    return;
+  }
+  if (!token) {
+    setAdminFeedback(adminResetError, 'Reset token is missing. Use the link from your email.', true);
+    setAdminFeedback(adminResetMessage, '', false);
+    return;
+  }
+
+  const backendUrl = getResetBackendUrl();
+  try {
+    const res = await fetch(`${backendUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to reset password');
+    }
+    setAdminFeedback(adminResetMessage, 'Password has been reset. Return to login.', false);
+    setAdminFeedback(adminResetError, '', false);
+    if (adminResetForm) adminResetForm.reset();
+  } catch (err) {
+    console.warn('Reset password failed', err);
+    setAdminFeedback(adminResetError, err.message || 'Failed to reset password.', true);
+    setAdminFeedback(adminResetMessage, '', false);
+  }
+}
+
+async function handleAdminLogin(event) {
+  event.preventDefault();
+  if (!adminLoginForm) return;
+
+  const email = adminLoginForm.querySelector('#admin-email')?.value.trim() || '';
+  const password = adminLoginForm.querySelector('#admin-password')?.value || '';
+  let loginError = 'Login failed. Check email and password.';
+
+  if (!email || !password) {
+    loginError = 'Please enter both admin email and password.';
+    if (adminLoginError) {
+      adminLoginError.textContent = loginError;
+      adminLoginError.style.display = 'block';
+    }
+    return;
+  }
+
+  const normalizedEmail = email.replace(',', '@').toLowerCase();
+  const validEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase() || normalizedEmail === ADMIN_EMAIL_ALT.replace(',', '@').toLowerCase();
+  const validPassword = password === ADMIN_PASSWORD;
+
+  // If backend is configured and enabled, try backend auth first
+  const backendCfg = getBackendConfig();
+  if (backendCfg.enabled && backendCfg.url) {
+    try {
+      await backendLogin(email, password);
+      if (adminLoginError) adminLoginError.style.display = 'none';
+      setAdminLoggedIn(true);
+      updateWhatsAppDisplay();
+      renderAdminItemList();
+      updateNavLinks();
+      if (currentPage.toLowerCase() === 'admin.html') {
+        window.location.replace('admin-dashboard.html');
+      } else {
+        showAdminDashboard();
+      }
+      return;
+    } catch (e) {
+      console.warn('Backend login failed', e);
+      const errMsg = (e && e.message) ? e.message : '';
+      if (errMsg.includes('Backend not configured')) {
+        loginError = 'Backend is not configured correctly. Check the backend URL and enable backend sync.';
+      } else if (/unauthorized|401|invalid/i.test(errMsg)) {
+        loginError = 'Backend credentials are incorrect. Use the correct admin email and password.';
+      } else if (/failed|network|fetch/i.test(errMsg)) {
+        loginError = 'Backend login failed due to network or server connection issues.';
+      } else {
+        loginError = 'Backend login failed. Check the backend settings and try again.';
+      }
+    }
+  }
+
+  if (validEmail && validPassword) {
+    if (adminLoginError) adminLoginError.style.display = 'none';
+    setAdminLoggedIn(true);
+    updateWhatsAppDisplay();
+    renderAdminItemList();
+    updateNavLinks();
+    if (currentPage.toLowerCase() === 'admin.html') {
+      window.location.replace('admin-dashboard.html');
+    } else {
+      showAdminDashboard();
+    }
+  } else if (adminLoginError) {
+    if (!validEmail && !validPassword) {
+      loginError = 'Admin email and password do not match our records.';
+    } else if (!validEmail) {
+      loginError = 'Admin email not recognized. Please verify the admin email.';
+    } else if (!validPassword) {
+      loginError = 'Incorrect password. Please try again.';
+    }
+    adminLoginError.textContent = loginError;
+    adminLoginError.style.display = 'block';
+  }
+}
+
+async function handleAdminSettings(event) {
+  event.preventDefault();
+  if (!adminWhatsappInput) return;
+  const number = normalizeWhatsApp(adminWhatsappInput.value) || DEFAULT_WHATSAPP;
+  saveWhatsAppNumber(number);
+  updateWhatsAppDisplay();
+  // save firebase config and cloud sync flag if provided
+  const firebaseTextarea = document.getElementById('firebase-config');
+  const cloudCheckbox = document.getElementById('admin-cloud-sync-enable');
+  if (firebaseTextarea) {
+    const raw = firebaseTextarea.value.trim();
+    if (raw) saveFirebaseConfig(raw);
+  }
+  if (cloudCheckbox) {
+    setCloudSyncEnabled(!!cloudCheckbox.checked);
+  }
+  initFirebaseIfConfigured().then(ok => {
+    const status = document.getElementById('cloud-status');
+    if (status) status.textContent = ok ? 'Cloud: configured' : 'Cloud: not configured';
+    // start or stop listener based on checkbox
+    if (ok && isCloudSyncEnabled()) startCloudListener(); else stopCloudListener();
+  });
+  // save backend config
+  const backendUrlInput = document.getElementById('backend-api-url');
+  const backendTokenInput = document.getElementById('backend-admin-token');
+  const backendCheckbox = document.getElementById('backend-sync-enable');
+  if (backendUrlInput) localStorage.setItem(STORAGE_BACKEND_URL, backendUrlInput.value.trim());
+  if (backendTokenInput) localStorage.setItem(STORAGE_BACKEND_TOKEN, backendTokenInput.value.trim());
+  if (backendCheckbox) localStorage.setItem(STORAGE_BACKEND_ENABLED, backendCheckbox.checked ? '1' : '0');
+  // start or stop backend sync
+  if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+    startBackendRealtime();
+    await loadCatalogFromBackendIfConfigured();
+  } else stopBackendPoller();
+  if (adminSettingsMessage) {
+    adminSettingsMessage.style.display = 'block';
+    setTimeout(() => {
+      adminSettingsMessage.style.display = 'none';
+    }, 2500);
+  }
+}
+
+function updateAdminRemoveCategoryPreview() {
+  const category = adminRemoveCategorySelect?.value;
+  if (!category || !adminRemoveCategoryPreview) return;
+  const matching = catalogItems.filter(item => item.category === category);
+  if (!matching.length) {
+    adminRemoveCategoryPreview.innerHTML = '<p style="margin:0; color:var(--muted);">No items found in this category.</p>';
+    return;
+  }
+  adminRemoveCategoryPreview.innerHTML = matching.map(item => `
+    <div style="padding:0.75rem; border-radius:12px; background:white; border:1px solid rgba(15,76,129,0.08);">
+      <strong>${item.title}</strong>
+      <p style="margin:0.35rem 0 0; color:var(--muted);">${item.description}</p>
+    </div>
+  `).join('');
+}
+
+function handleAdminRemoveCategory(event) {
+  event.preventDefault();
+  if (!adminRemoveCategoryForm) return;
+  const category = adminRemoveCategoryForm.querySelector('#admin-remove-category')?.value;
+  if (!category) return;
+  const matching = catalogItems.filter(item => item.category === category);
+  if (!matching.length) {
+    createToast(`No items found in ${category}.`, { type: 'warning' });
+    return;
+  }
+  const confirmed = confirm(`Remove all ${category} items from the catalog? This cannot be undone.`);
+  if (!confirmed) return;
+  const updated = catalogItems.filter(item => item.category !== category);
+  saveCatalog(updated);
+  renderCatalog();
+  renderAdminItemList();
+  updateAdminRemoveCategoryPreview();
+  createToast(`Removed ${matching.length} ${category} item${matching.length === 1 ? '' : 's'}.`, { type: 'success' });
+}
+
+async function handleAdminAddItem(event) {
+  event.preventDefault();
+  if (!adminAddItemForm) return;
+
+  const category = adminAddItemForm.querySelector('#admin-item-category')?.value;
+  const fileInput = adminAddItemForm.querySelector('#admin-item-image');
+  const title = adminAddItemForm.querySelector('#admin-item-title')?.value.trim();
+  const description = adminAddItemForm.querySelector('#admin-item-description')?.value.trim();
+  const price = parseFloat(adminAddItemForm.querySelector('#admin-item-price')?.value || '0') || 0;
+
+  if (!category || !title || !description) return;
+  const file = fileInput?.files && fileInput.files[0];
+  if (!file) return;
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const item = {
+    id: `${category}-${Date.now()}`,
+    category,
+    title,
+    description,
+    image: dataUrl,
+    price,
+  };
+
+  // If editing an existing item, update instead of creating new
+  const editIdField = document.getElementById('admin-edit-id');
+  const isEdit = editIdField && editIdField.value;
+  if (isEdit) {
+    const existingId = editIdField.value;
+    // find existing and update fields
+    const updated = (catalogItems || []).map(it => {
+      if (it.id === existingId) {
+        return { ...it, category, title, description, price, image: dataUrl };
+      }
+      return it;
+    });
+
+    // push changes to backend if configured
+    const backendCfg = getBackendConfig();
+    if (backendCfg.enabled && backendCfg.url) {
+      try {
+        // upload image and replace catalog via backend
+        const url = await backendUploadImage(dataUrl);
+        const withUrls = updated.map(it => it.id === existingId ? { ...it, image: url } : it);
+        await backendReplaceCatalog(withUrls);
+        saveCatalog(withUrls);
+      } catch (e) {
+        console.warn('Backend update failed, saving locally', e);
+        saveCatalog(updated);
+      }
+    } else {
+      saveCatalog(updated);
+    }
+
+    // reset edit state
+    if (editIdField) editIdField.value = '';
+    const submitBtn = adminAddItemForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = 'Add item';
+
+    renderCatalog();
+    renderAdminItemList();
+    createToast('Item updated.', { type: 'success' });
+    adminAddItemForm.reset();
+    if (adminItemImagePreview) { adminItemImagePreview.style.display = 'none'; adminItemImagePreview.src = ''; }
+    return;
+  }
+
+  // If backend sync enabled, upload image and create item via backend
+  const backendCfg = getBackendConfig();
+  if (backendCfg.enabled && backendCfg.url) {
+    try {
+      const url = await backendUploadImage(dataUrl);
+      item.image = url;
+      await backendCreateItem(item);
+      // fetch latest catalog from backend to keep in sync
+      const latest = await backendFetchCatalog();
+      if (Array.isArray(latest)) saveCatalog(latest);
+    } catch (e) {
+      console.warn('Backend add failed, falling back to local', e);
+      saveCatalog([...catalogItems, item]);
+    }
+  } else {
+    saveCatalog([...catalogItems, item]);
+  }
+  renderCatalog();
+  renderAdminItemList();
+
+  if (adminAddMessage) {
+    adminAddMessage.style.display = 'block';
+    setTimeout(() => {
+      adminAddMessage.style.display = 'none';
+    }, 2500);
+  }
+
+  if (adminItemImagePreview) {
+    adminItemImagePreview.style.display = 'none';
+    adminItemImagePreview.src = '';
+  }
+
+  adminAddItemForm.reset();
+  // If cloud sync enabled, try to upload this item's image and update catalog with cloud URL
+  if (isCloudSyncEnabled()) {
+    initFirebaseIfConfigured().then(async (ok) => {
+      if (!ok) return;
+      try {
+        const ext = item.image.substring(5, item.image.indexOf(';')).split('/')[1] || 'jpg';
+        const path = `visionplus/catalog/${item.id}.${ext}`;
+        const url = await uploadDataUrlToStorage(item.image, path);
+        // update local catalog with cloud url
+        const updated = (catalogItems || []).map(it => it.id === item.id ? { ...it, image: url } : it);
+        saveCatalog(updated);
+        renderCatalog();
+        renderAdminItemList();
+        createToast('Item uploaded to cloud', { type: 'success' });
+      } catch (e) {
+        console.warn('Cloud upload failed for item', e);
+      }
+    });
+  }
+}
+
+function handleAppointmentSubmit(event) {
+  event.preventDefault();
+  if (!appointmentForm) return;
+
+  const name = appointmentForm.querySelector('#name')?.value.trim();
+  const email = appointmentForm.querySelector('#email')?.value.trim();
+  const phonePrefix = appointmentForm.querySelector('#phone-prefix')?.value || '';
+  const phone = appointmentForm.querySelector('#phone')?.value.trim() || '';
+  const service = appointmentForm.querySelector('#service')?.value;
+  const date = appointmentForm.querySelector('#date')?.value;
+  const timeSlot = appointmentForm.querySelector('#time-slot')?.value || '';
+  const message = appointmentForm.querySelector('#message')?.value.trim();
+
+  const number = normalizeWhatsApp(currentWhatsApp);
+  const text = encodeURIComponent(
+    `Appointment request from ${name}\n` +
+    `Email: ${email}\n` +
+    `Phone: ${phonePrefix} ${phone}\n` +
+    `Service: ${service}\n` +
+    `Preferred date: ${date}\n` +
+    `Preferred time: ${timeSlot}\n` +
+    `Notes: ${message || 'N/A'}`
+  );
+  const whatsappUrl = `https://wa.me/${number.replace('+', '')}?text=${text}`;
+
+  if (formMessage) {
+    formMessage.textContent = 'Your appointment request is being sent to WhatsApp.';
+    formMessage.style.display = 'block';
+  }
+
+  window.open(whatsappUrl, '_blank');
+  appointmentForm.reset();
+}
+
+async function initialize() {
+  createAccountModal();
+  updateAccountDisplay();
+  updateWhatsAppDisplay();
+  await loadCatalogFromBackendIfConfigured();
+  renderCatalog();
+  renderAdminItemList();
+  updateCartButton();
+  // wire account buttons with delegation so clicks work even if the button is re-rendered
+  document.body.addEventListener('click', (e) => {
+    const button = e.target.closest('#account-button');
+    if (!button) return;
+    e.preventDefault();
+    if (!document.getElementById('account-modal')) {
+      createAccountModal();
+    }
+    updateAccountDisplay();
+    openAccountModal();
+  });
+
+  serviceButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      serviceButtons.forEach((btn) => btn.classList.remove('active'));
+      servicePanels.forEach((panel) => panel.classList.remove('active'));
+
+      button.classList.add('active');
+      const target = document.getElementById(button.dataset.target);
+      if (target) {
+        target.classList.add('active');
+      }
+    });
+  });
+
+  if (appointmentForm) {
+    appointmentForm.addEventListener('submit', handleAppointmentSubmit);
+  }
+
+  if (adminLoginForm) {
+    adminLoginForm.addEventListener('submit', handleAdminLogin);
+  }
+
+  if (adminForgotLink) {
+    adminForgotLink.addEventListener('click', () => {
+      if (adminLoginCard) adminLoginCard.style.display = 'block';
+      showAdminForgotPasswordSection(true);
+      if (document.getElementById('admin-reset-section')) {
+        document.getElementById('admin-reset-section').classList.add('hidden');
+      }
+      setAdminFeedback(adminForgotMessage, '', false);
+      setAdminFeedback(adminForgotError, '', false);
+    });
+  }
+
+  if (adminForgotForm) {
+    adminForgotForm.addEventListener('submit', handleAdminForgotPassword);
+  }
+
+  if (adminResetForm) {
+    adminResetForm.addEventListener('submit', handleAdminResetPassword);
+  }
+
+  if (adminSettingsForm) {
+    adminSettingsForm.addEventListener('submit', handleAdminSettings);
+  }
+
+  if (adminRemoveCategoryForm) {
+    adminRemoveCategoryForm.addEventListener('submit', handleAdminRemoveCategory);
+  }
+
+  if (adminRemoveCategorySelect) {
+    adminRemoveCategorySelect.addEventListener('change', updateAdminRemoveCategoryPreview);
+    updateAdminRemoveCategoryPreview();
+  }
+
+  if (adminAddItemForm) {
+    adminAddItemForm.addEventListener('submit', handleAdminAddItem);
+    const fileInput = adminAddItemForm.querySelector('#admin-item-image');
+    if (adminItemUploadButton && fileInput) {
+      adminItemUploadButton.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        if (!fileInput.files || !fileInput.files[0]) {
+          adminItemImagePreview.style.display = 'none';
+          adminItemImagePreview.src = '';
+          return;
+        }
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          adminItemImagePreview.src = reader.result;
+          adminItemImagePreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  }
+
+  if (adminLogoutButton) {
+    adminLogoutButton.addEventListener('click', () => {
+      setAdminLoggedIn(false);
+      hideAdminDashboard();
+      // clear backend JWT and stop realtime/poller
+      setBackendAuthToken('');
+      stopBackendRealtime();
+      stopBackendSSE();
+      stopBackendPoller();
+      updateNavLinks();
+    });
+  }
+
+  // Cloud sync controls
+  const firebaseTextarea = document.getElementById('firebase-config');
+  const cloudCheckbox = document.getElementById('admin-cloud-sync-enable');
+  const cloudSyncBtn = document.getElementById('cloud-sync-now');
+  const cloudLoadBtn = document.getElementById('cloud-load-now');
+  const cloudStatus = document.getElementById('cloud-status');
+  if (firebaseTextarea) firebaseTextarea.value = getFirebaseConfigRaw();
+  if (cloudCheckbox) cloudCheckbox.checked = isCloudSyncEnabled();
+  if (cloudStatus) cloudStatus.textContent = (getFirebaseConfigRaw() ? 'Cloud: configured' : 'Cloud: not configured');
+  // backend UI
+  const backendUrlInput = document.getElementById('backend-api-url');
+  const backendTokenInput = document.getElementById('backend-admin-token');
+  const backendCheckbox = document.getElementById('backend-sync-enable');
+  const backendTestBtn = document.getElementById('backend-test-connection');
+  const backendUrlValue = backendUrlInput ? backendUrlInput.value.trim() : '';
+  const backendEnabledStored = localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1';
+  const backendEnabled = backendEnabledStored || !!backendUrlValue;
+  if (backendUrlInput) backendUrlInput.value = localStorage.getItem(STORAGE_BACKEND_URL) || '';
+  if (backendTokenInput) backendTokenInput.value = localStorage.getItem(STORAGE_BACKEND_TOKEN) || '';
+  if (backendCheckbox) {
+    backendCheckbox.checked = backendEnabled;
+    if (backendEnabled && !backendEnabledStored) {
+      localStorage.setItem(STORAGE_BACKEND_ENABLED, '1');
+    }
+  }
+  if (backendTestBtn) backendTestBtn.addEventListener('click', async () => { await backendTestConnection(); });
+  if (backendCheckbox && backendCheckbox.checked) {
+    // try to start poller
+    // prefer realtime
+    startBackendRealtime();
+    backendTestConnection();
+  }
+
+  const resetToken = getQueryParam('resetToken');
+  if (resetToken) {
+    showAdminResetSection(resetToken);
+  }
+  if (cloudSyncBtn) cloudSyncBtn.addEventListener('click', async () => {
+    if (!isCloudSyncEnabled()) {
+      createToast('Enable cloud sync in settings first', { type: 'warning' });
+      return;
+    }
+    await syncCatalogToCloud();
+  });
+  if (cloudLoadBtn) cloudLoadBtn.addEventListener('click', async () => {
+    if (!isCloudSyncEnabled()) {
+      createToast('Enable cloud sync in settings first', { type: 'warning' });
+      return;
+    }
+    await loadCatalogFromCloud();
+  });
+  // ensure listener is running if cloud sync enabled on init
+  if (isCloudSyncEnabled()) {
+    initFirebaseIfConfigured().then(ok => { if (ok) startCloudListener(); });
+  }
+  const cloudTestBtn = document.getElementById('cloud-test-connection');
+  if (cloudTestBtn) cloudTestBtn.addEventListener('click', async () => {
+    createToast('Testing cloud connection...');
+    const ok = await initFirebaseIfConfigured();
+    const status = document.getElementById('cloud-status');
+    if (!ok) {
+      createToast('Firebase init failed — check config', { type: 'error' });
+      if (status) status.textContent = 'Cloud: not configured / invalid';
+      return;
+    }
+    try {
+      // try to read catalog doc
+      const doc = await firebaseFirestore.doc('visionplus/catalog').get();
+      createToast('Cloud connection OK' + (doc.exists ? ' (catalog found)' : ''), { type: 'success' });
+      if (status) status.textContent = 'Cloud: connected';
+    } catch (e) {
+      console.error(e);
+      createToast('Connected to Firebase but failed to access Firestore (check rules)', { type: 'warning' });
+      if (status) status.textContent = 'Cloud: connected (access denied?)';
+    }
+  });
+
+  // Firebase rules UI wiring
+  const rulesToggle = document.getElementById('firebase-rules-toggle');
+  const rulesPanel = document.getElementById('firebase-rules-panel');
+  const firestoreTa = document.getElementById('firestore-rules');
+  const storageTa = document.getElementById('storage-rules');
+  const copyFsBtn = document.getElementById('copy-firestore-rules');
+  const copyFsTestBtn = document.getElementById('copy-firestore-testing');
+  const copyStBtn = document.getElementById('copy-storage-rules');
+  const copyStTestBtn = document.getElementById('copy-storage-testing');
+  if (firestoreTa) firestoreTa.value = RULES.firestore_secure;
+  if (storageTa) storageTa.value = RULES.storage_secure;
+  if (rulesToggle && rulesPanel) {
+    rulesToggle.addEventListener('click', () => {
+      rulesPanel.style.display = rulesPanel.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+  if (copyFsBtn) copyFsBtn.addEventListener('click', () => copyToClipboard(RULES.firestore_secure).then(() => createToast('Firestore rules copied')));
+  if (copyFsTestBtn) copyFsTestBtn.addEventListener('click', () => copyToClipboard(RULES.firestore_testing).then(() => createToast('Testing Firestore rules copied')));
+  if (copyStBtn) copyStBtn.addEventListener('click', () => copyToClipboard(RULES.storage_secure).then(() => createToast('Storage rules copied')));
+  if (copyStTestBtn) copyStTestBtn.addEventListener('click', () => copyToClipboard(RULES.storage_testing).then(() => createToast('Testing Storage rules copied')));
+
+  const pageName = currentPage.toLowerCase();
+  if (pageName === 'admin-dashboard.html') {
+    if (!isAdminLoggedIn()) {
+      window.location.replace('admin.html');
+      return;
+    }
+  } else if (pageName === 'admin.html' && isAdminLoggedIn()) {
+    window.location.replace('admin-dashboard.html');
+    return;
+  }
+
+  if (isAdminLoggedIn()) showAdminDashboard(); else hideAdminDashboard();
+  updateNavLinks();
+  setActiveNavLink();
+  if (cartContents) renderCartPage();
+}
+
+function setActiveNavLink() {
+  const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  document.querySelectorAll('.site-nav a').forEach((link) => {
+    const href = link.getAttribute('href') || '';
+    let normalized = href.split('#')[0].split('?')[0];
+    if (!normalized) normalized = 'index.html';
+    const active = normalized === currentPage || (currentPage === 'index.html' && href === '#about');
+    link.classList.toggle('active', active);
+  });
+}
+
+initialize();
