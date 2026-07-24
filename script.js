@@ -3,6 +3,9 @@ const servicePanels = document.querySelectorAll('.service-content');
 
 const DEFAULT_WHATSAPP = '+260768130131';
 const ADMIN_EMAIL = 'vplusopticians@gmail.com';
+const supabaseKey = "sb_publishable_AmPZL8ra6Q_s5kngGZD69w_Wp08-h1K";
+const supabaseUrl = "https://iuumlmlyqmyqxwgoshca.supabase.co/rest/v1/"
+const supabase = window.supabase.createClient(supabaseUrl,supabaseKey);
 
   // Export / Import catalog so admins can move catalog (and uploaded images) between devices
   const exportBtn = document.getElementById('export-catalog');
