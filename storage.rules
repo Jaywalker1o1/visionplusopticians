@@ -1,0 +1,12 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Files uploaded under the `visionplus/` folder
+    match /visionplus/{allPaths=**} {
+      // Allow public reads so images are visible on the site
+      allow read: if true;
+      // Allow writes only for authenticated users (admins)
+      allow write: if request.auth != null;
+    }
+  }
+}
