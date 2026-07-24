@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Store the catalog under collection or doc path `visionplus/catalog`.
+    match /visionplus/{document=**} {
+      // Allow public reads (catalog can be viewed by anyone)
+      allow read: if true;
+      // Allow writes only for authenticated users (enable Firebase Authentication for admin operations)
+      allow write: if request.auth != null;
+    }
+  }
+}
