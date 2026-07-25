@@ -58,6 +58,8 @@ const STORAGE_USERS = 'visionplus_users';
 const SESSION_CUSTOMER = 'visionplus_customer';
 const STORAGE_FIREBASE_CONFIG = 'visionplus_firebase_config';
 const STORAGE_CLOUD_SYNC = 'visionplus_cloud_sync_enabled';
+const STORAGE_SUPABASE_CONFIG = 'visionplus_supabase_config';
+const STORAGE_SUPABASE_SYNC = 'visionplus_supabase_sync_enabled';
 const STORAGE_BACKEND_URL = 'visionplus_backend_url';
 const STORAGE_BACKEND_TOKEN = 'visionplus_backend_token';
 const STORAGE_BACKEND_ENABLED = 'visionplus_backend_enabled';
@@ -67,6 +69,9 @@ let firebaseApp = null;
 let firebaseFirestore = null;
 let firebaseStorage = null;
 let cloudListenerUnsub = null;
+let supabaseClient = null;
+let supabaseInitialized = false;
+let supabasePoller = null;
 let backendPoller = null;
 let backendSocket = null;
 
@@ -137,6 +142,106 @@ function startCloudListener() {
   });
 }
 
+function loadSupabaseSdk() {
+  return new Promise((resolve, reject) => {
+    if (window.supabase) return resolve();
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+async function initSupabaseIfConfigured() {
+  if (supabaseInitialized) return true;
+  const raw = localStorage.getItem(STORAGE_SUPABASE_CONFIG);
+  if (!raw) return false;
+  let cfg;
+  try { cfg = JSON.parse(raw); } catch (e) { return false; }
+  if (!cfg.url || !cfg.anonKey) return false;
+  try {
+    await loadSupabaseSdk();
+    supabaseClient = window.supabase.createClient(cfg.url, cfg.anonKey);
+    supabaseInitialized = true;
+    return true;
+  } catch (e) {
+    console.warn('Supabase init failed', e);
+    return false;
+  }
+}
+
+function getSupabaseConfig() {
+  const raw = localStorage.getItem(STORAGE_SUPABASE_CONFIG);
+  if (!raw) return { enabled: false, url: '', anonKey: '', table: 'catalog' };
+  try {
+    const cfg = JSON.parse(raw);
+    return { enabled: !!cfg.enabled, url: cfg.url || '', anonKey: cfg.anonKey || '', table: cfg.table || 'catalog' };
+  } catch (e) {
+    return { enabled: false, url: '', anonKey: '', table: 'catalog' };
+  }
+}
+
+function startSupabasePoller(interval = 5000) {
+  stopSupabasePoller();
+  if (!isSupabaseSyncEnabled()) return;
+  supabasePoller = setInterval(async () => {
+    try {
+      const ok = await initSupabaseIfConfigured();
+      if (!ok || !supabaseClient) return;
+      const cfg = getSupabaseConfig();
+      const { data, error } = await supabaseClient.from(cfg.table || 'catalog').select('*').eq('id', 'visionplus_catalog').maybeSingle();
+      if (error) throw error;
+      if (data && Array.isArray(data.items)) {
+        saveCatalog(data.items);
+        renderCatalog();
+        renderAdminItemList();
+        const status = document.getElementById('supabase-status');
+        if (status) status.textContent = 'Supabase: synced';
+      }
+    } catch (e) {
+      console.warn('Supabase poll failed', e);
+    }
+  }, interval);
+  const status = document.getElementById('supabase-status');
+  if (status) status.textContent = 'Supabase: polling';
+}
+
+function stopSupabasePoller() {
+  if (supabasePoller) {
+    clearInterval(supabasePoller);
+    supabasePoller = null;
+  }
+  const status = document.getElementById('supabase-status');
+  if (status) status.textContent = 'Supabase: idle';
+}
+
+async function syncCatalogToSupabase() {
+  const cfg = getSupabaseConfig();
+  if (!cfg.enabled || !cfg.url || !cfg.anonKey) return false;
+  const ok = await initSupabaseIfConfigured();
+  if (!ok || !supabaseClient) throw new Error('Supabase not initialized');
+  const payload = { id: 'visionplus_catalog', items: JSON.parse(JSON.stringify(catalogItems)), updatedAt: Date.now() };
+  const { error } = await supabaseClient.from(cfg.table || 'catalog').upsert(payload, { onConflict: 'id' }).select();
+  if (error) throw error;
+  return true;
+}
+
+async function loadCatalogFromSupabase() {
+  const cfg = getSupabaseConfig();
+  if (!cfg.enabled || !cfg.url || !cfg.anonKey) return false;
+  const ok = await initSupabaseIfConfigured();
+  if (!ok || !supabaseClient) throw new Error('Supabase not initialized');
+  const { data, error } = await supabaseClient.from(cfg.table || 'catalog').select('*').eq('id', 'visionplus_catalog').maybeSingle();
+  if (error) throw error;
+  if (!data || !Array.isArray(data.items)) return false;
+  saveCatalog(data.items);
+  renderCatalog();
+  renderAdminItemList();
+  return true;
+}
+
 function stopCloudListener() {
   if (cloudListenerUnsub) {
     try { cloudListenerUnsub(); } catch (e) { /* ignore */ }
@@ -149,6 +254,10 @@ function saveFirebaseConfig(raw) { localStorage.setItem(STORAGE_FIREBASE_CONFIG,
 function getFirebaseConfigRaw() { return localStorage.getItem(STORAGE_FIREBASE_CONFIG) || ''; }
 function isCloudSyncEnabled() { return localStorage.getItem(STORAGE_CLOUD_SYNC) === '1'; }
 function setCloudSyncEnabled(v) { localStorage.setItem(STORAGE_CLOUD_SYNC, v ? '1' : '0'); }
+function saveSupabaseConfig(raw) { localStorage.setItem(STORAGE_SUPABASE_CONFIG, raw); }
+function getSupabaseConfigRaw() { return localStorage.getItem(STORAGE_SUPABASE_CONFIG) || ''; }
+function isSupabaseSyncEnabled() { return localStorage.getItem(STORAGE_SUPABASE_SYNC) === '1'; }
+function setSupabaseSyncEnabled(v) { localStorage.setItem(STORAGE_SUPABASE_SYNC, v ? '1' : '0'); }
 function getBackendConfig() { return { url: localStorage.getItem(STORAGE_BACKEND_URL) || BACKEND_DEFAULT_URL, token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '', enabled: localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1' }; }
 function saveBackendConfig({ url, token, enabled }) { if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url); if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token); localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0'); }
 
@@ -396,57 +505,86 @@ async function uploadDataUrlToStorage(dataUrl, path) {
 }
 
 async function syncCatalogToCloud() {
-  const ok = await initFirebaseIfConfigured();
-  if (!ok) {
-    createToast('Firebase not configured or invalid config', { type: 'error' });
-    return;
-  }
-  try {
-    // upload images that are data URLs
-    const items = JSON.parse(JSON.stringify(catalogItems));
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (it.image && it.image.startsWith('data:')) {
-        const ext = it.image.substring(5, it.image.indexOf(';')).split('/')[1] || 'jpg';
-        const path = `visionplus/catalog/${it.id}.${ext}`;
-        try {
-          const url = await uploadDataUrlToStorage(it.image, path);
-          it.image = url;
-        } catch (e) {
-          console.warn('Upload failed for', it.id, e);
+  const syncedProviders = [];
+  if (isCloudSyncEnabled()) {
+    const ok = await initFirebaseIfConfigured();
+    if (ok) {
+      try {
+        const items = JSON.parse(JSON.stringify(catalogItems));
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          if (it.image && it.image.startsWith('data:')) {
+            const ext = it.image.substring(5, it.image.indexOf(';')).split('/')[1] || 'jpg';
+            const path = `visionplus/catalog/${it.id}.${ext}`;
+            try {
+              const url = await uploadDataUrlToStorage(it.image, path);
+              it.image = url;
+            } catch (e) {
+              console.warn('Upload failed for', it.id, e);
+            }
+          }
         }
+        await firebaseFirestore.doc('visionplus/catalog').set({ items, updatedAt: Date.now() });
+        syncedProviders.push('Firebase');
+      } catch (e) {
+        console.error(e);
+        createToast('Firebase sync failed', { type: 'warning' });
       }
     }
-    // save to Firestore as single doc
-    await firebaseFirestore.doc('visionplus/catalog').set({ items, updatedAt: Date.now() });
-    createToast('Catalog synced to cloud', { type: 'success' });
-  } catch (e) {
-    console.error(e);
-    createToast('Cloud sync failed', { type: 'error' });
+  }
+  if (isSupabaseSyncEnabled()) {
+    try {
+      await syncCatalogToSupabase();
+      syncedProviders.push('Supabase');
+    } catch (e) {
+      console.error(e);
+      createToast('Supabase sync failed', { type: 'warning' });
+    }
+  }
+  if (syncedProviders.length) {
+    createToast(`Catalog synced to ${syncedProviders.join(' + ')}`, { type: 'success' });
+  } else {
+    createToast('No cloud sync provider configured', { type: 'warning' });
   }
 }
 
 async function loadCatalogFromCloud() {
-  const ok = await initFirebaseIfConfigured();
-  if (!ok) {
-    createToast('Firebase not configured or invalid config', { type: 'error' });
+  if (isCloudSyncEnabled()) {
+    const ok = await initFirebaseIfConfigured();
+    if (ok) {
+      try {
+        const doc = await firebaseFirestore.doc('visionplus/catalog').get();
+        if (!doc.exists) { createToast('No catalog found in Firebase', { type: 'warning' }); return; }
+        const data = doc.data();
+        if (!data || !Array.isArray(data.items)) { createToast('Invalid cloud catalog', { type: 'error' }); return; }
+        const confirmed = confirm('Load catalog from Firebase and replace local catalog? This will overwrite local changes.');
+        if (!confirmed) return;
+        saveCatalog(data.items);
+        renderCatalog();
+        renderAdminItemList();
+        createToast('Catalog loaded from Firebase', { type: 'success' });
+        return;
+      } catch (e) {
+        console.error(e);
+        createToast('Failed to load catalog from Firebase', { type: 'warning' });
+      }
+    }
+  }
+  if (isSupabaseSyncEnabled()) {
+    try {
+      const ok = await loadCatalogFromSupabase();
+      if (ok) {
+        createToast('Catalog loaded from Supabase', { type: 'success' });
+        return;
+      }
+      createToast('No catalog found in Supabase', { type: 'warning' });
+    } catch (e) {
+      console.error(e);
+      createToast('Failed to load catalog from Supabase', { type: 'warning' });
+    }
     return;
   }
-  try {
-    const doc = await firebaseFirestore.doc('visionplus/catalog').get();
-    if (!doc.exists) { createToast('No catalog found in cloud', { type: 'warning' }); return; }
-    const data = doc.data();
-    if (!data || !Array.isArray(data.items)) { createToast('Invalid cloud catalog', { type: 'error' }); return; }
-    const confirmed = confirm('Load catalog from cloud and replace local catalog? This will overwrite local changes.');
-    if (!confirmed) return;
-    saveCatalog(data.items);
-    renderCatalog();
-    renderAdminItemList();
-    createToast('Catalog loaded from cloud', { type: 'success' });
-  } catch (e) {
-    console.error(e);
-    createToast('Failed to load catalog from cloud', { type: 'error' });
-  }
+  createToast('No cloud sync provider configured', { type: 'warning' });
 }
 
 function getUsers() { try { const raw = localStorage.getItem(STORAGE_USERS); return raw ? JSON.parse(raw) : []; } catch (e) { return []; } }
@@ -1362,6 +1500,8 @@ async function handleAdminSettings(event) {
   // save firebase config and cloud sync flag if provided
   const firebaseTextarea = document.getElementById('firebase-config');
   const cloudCheckbox = document.getElementById('admin-cloud-sync-enable');
+  const supabaseTextarea = document.getElementById('supabase-config');
+  const supabaseCheckbox = document.getElementById('admin-supabase-sync-enable');
   if (firebaseTextarea) {
     const raw = firebaseTextarea.value.trim();
     if (raw) saveFirebaseConfig(raw);
@@ -1369,12 +1509,27 @@ async function handleAdminSettings(event) {
   if (cloudCheckbox) {
     setCloudSyncEnabled(!!cloudCheckbox.checked);
   }
+  if (supabaseTextarea) {
+    const raw = supabaseTextarea.value.trim();
+    if (raw) saveSupabaseConfig(raw);
+  }
+  if (supabaseCheckbox) {
+    setSupabaseSyncEnabled(!!supabaseCheckbox.checked);
+  }
   initFirebaseIfConfigured().then(ok => {
     const status = document.getElementById('cloud-status');
     if (status) status.textContent = ok ? 'Cloud: configured' : 'Cloud: not configured';
     // start or stop listener based on checkbox
     if (ok && isCloudSyncEnabled()) startCloudListener(); else stopCloudListener();
   });
+  if (isSupabaseSyncEnabled()) {
+    const ok = await initSupabaseIfConfigured();
+    const status = document.getElementById('supabase-status');
+    if (status) status.textContent = ok ? 'Supabase: configured' : 'Supabase: not configured';
+    if (ok) startSupabasePoller(); else stopSupabasePoller();
+  } else {
+    stopSupabasePoller();
+  }
   // save backend config
   const backendUrlInput = document.getElementById('backend-api-url');
   const backendTokenInput = document.getElementById('backend-admin-token');
@@ -1498,6 +1653,7 @@ async function handleAdminAddItem(event) {
 
     renderCatalog();
     renderAdminItemList();
+    await syncCatalogToCloud();
     createToast('Item updated.', { type: 'success' });
     adminAddItemForm.reset();
     if (adminItemImagePreview) { adminItemImagePreview.style.display = 'none'; adminItemImagePreview.src = ''; }
@@ -1523,6 +1679,7 @@ async function handleAdminAddItem(event) {
   }
   renderCatalog();
   renderAdminItemList();
+  await syncCatalogToCloud();
 
   if (adminAddMessage) {
     adminAddMessage.style.display = 'block';
@@ -1707,9 +1864,17 @@ async function initialize() {
   const cloudSyncBtn = document.getElementById('cloud-sync-now');
   const cloudLoadBtn = document.getElementById('cloud-load-now');
   const cloudStatus = document.getElementById('cloud-status');
+  const supabaseTextarea = document.getElementById('supabase-config');
+  const supabaseCheckbox = document.getElementById('admin-supabase-sync-enable');
+  const supabaseSyncBtn = document.getElementById('supabase-sync-now');
+  const supabaseLoadBtn = document.getElementById('supabase-load-now');
+  const supabaseStatus = document.getElementById('supabase-status');
   if (firebaseTextarea) firebaseTextarea.value = getFirebaseConfigRaw();
   if (cloudCheckbox) cloudCheckbox.checked = isCloudSyncEnabled();
   if (cloudStatus) cloudStatus.textContent = (getFirebaseConfigRaw() ? 'Cloud: configured' : 'Cloud: not configured');
+  if (supabaseTextarea) supabaseTextarea.value = getSupabaseConfigRaw();
+  if (supabaseCheckbox) supabaseCheckbox.checked = isSupabaseSyncEnabled();
+  if (supabaseStatus) supabaseStatus.textContent = (getSupabaseConfigRaw() ? 'Supabase: configured' : 'Supabase: not configured');
   // backend UI
   const backendUrlInput = document.getElementById('backend-api-url');
   const backendTokenInput = document.getElementById('backend-admin-token');
@@ -1759,9 +1924,31 @@ async function initialize() {
     }
     await loadCatalogFromCloud();
   });
+  if (supabaseSyncBtn) supabaseSyncBtn.addEventListener('click', async () => {
+    if (!isSupabaseSyncEnabled()) {
+      createToast('Enable Supabase sync in settings first', { type: 'warning' });
+      return;
+    }
+    try {
+      await syncCatalogToSupabase();
+      createToast('Catalog synced to Supabase', { type: 'success' });
+    } catch (e) {
+      createToast('Supabase sync failed', { type: 'error' });
+    }
+  });
+  if (supabaseLoadBtn) supabaseLoadBtn.addEventListener('click', async () => {
+    if (!isSupabaseSyncEnabled()) {
+      createToast('Enable Supabase sync in settings first', { type: 'warning' });
+      return;
+    }
+    await loadCatalogFromSupabase();
+  });
   // ensure listener is running if cloud sync enabled on init
   if (isCloudSyncEnabled()) {
     initFirebaseIfConfigured().then(ok => { if (ok) startCloudListener(); });
+  }
+  if (isSupabaseSyncEnabled()) {
+    initSupabaseIfConfigured().then(ok => { if (ok) startSupabasePoller(); });
   }
   const cloudTestBtn = document.getElementById('cloud-test-connection');
   if (cloudTestBtn) cloudTestBtn.addEventListener('click', async () => {

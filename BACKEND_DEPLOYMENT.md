@@ -59,10 +59,12 @@ This project uses a shared backend to store product catalog items and uploaded i
 
 ## Connecting the frontend admin panel
 1. Open `admin-dashboard.html`.
-2. In `Backend API base URL`, enter your backend URL.
-3. In `Backend admin token`, enter `ADMIN_TOKEN` if using the legacy token.
+2. In `Backend URL`, enter your deployed backend URL.
+3. In `Backend admin token`, enter your `ADMIN_TOKEN` if using the legacy token.
 4. Enable backend sync.
 5. Click `Test backend`.
+6. Paste your Firebase config JSON and/or Supabase config JSON, then enable the relevant sync toggle.
+7. Click `Sync to Firebase` or `Sync to Supabase` to push the catalog to the live cloud providers.
 
 ## Important notes
 - The frontend can be hosted on GitHub Pages, but it must point to the deployed backend URL.

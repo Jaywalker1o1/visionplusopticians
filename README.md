@@ -54,7 +54,12 @@ npm start
    - `ADMIN_PASS` = admin1234 (optional)
    - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (optional, for password reset)
 4. Deploy and note the backend URL
-5. Update admin settings in frontend to point to deployed backend
+5. Update admin settings in frontend to point to the deployed backend
+
+### Live sync across devices
+1. Open the admin dashboard and paste your Firebase config JSON (project settings -> SDK config)
+2. Paste your Supabase config JSON with the project URL and anon key
+3. Enable Firebase sync and/or Supabase sync so catalog edits appear on every connected device
 
 ## Environment Variables (Backend)
 

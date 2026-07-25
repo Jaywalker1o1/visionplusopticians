@@ -17,6 +17,7 @@ Environment
 - `PORT` (optional): port to run server on (default 4000).
 - `ADMIN_USER` (optional): admin email address to accept for backend JWT login.
 - `ADMIN_PASS` (optional): admin password to accept for backend JWT login.
+- `JWT_SECRET` (optional): secret for signing JWTs.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (optional): configure SMTP to send password reset emails.
 - `SMTP_SECURE` (optional): set to `true` for secure SMTP/TLS.
 - `EMAIL_FROM` (optional): sender address for password reset messages.
