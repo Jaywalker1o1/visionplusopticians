@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,3 +68,74 @@
   </script>
 </body>
 </html>
+=======
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Order Summary | Vision Plus Opticians</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="images/vison plus.jpeg" alt="Vision Plus logo" class="brand-logo" /></a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="frames.html">Frames</a>
+        <a href="cases.html">Cases</a>
+        <a href="contact-lenses.html">Contact Lenses</a>
+        <a href="appointment.html">Appointment</a>
+        <a href="index.html#contact">Contact</a>
+        <a href="admin.html" id="admin-nav-link">Admin</a>
+        <a href="cart.html" id="cart-nav-link">Cart</a>
+        <a href="#" id="account-button" aria-label="Account"><span class="account-icon">👤</span></a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <section class="section">
+      <div class="section-title">
+        <h2>Order Summary</h2>
+        <p id="order-note">This is a read-only view of the customer's order.</p>
+      </div>
+      <div id="order-contents"></div>
+    </section>
+  </main>
+  <footer>
+    <div class="container">
+      <p>© 2026 Vision Plus Opticians</p>
+    </div>
+  </footer>
+  <script src="script.js"></script>
+  <script>
+    function parseQuery(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    function renderOrder() {
+      const raw = parseQuery('cart');
+      const container = document.getElementById('order-contents');
+      if (!raw) { container.innerHTML = '<p>No order data provided.</p>'; return; }
+      try {
+        const payload = JSON.parse(decodeURIComponent(raw));
+        const { customer, items, total } = payload;
+        let html = '<div class="product-grid">';
+        items.forEach(it => {
+          html += `<div class="product-card"><h4>${it.title}</h4><p>Quantity: ${it.qty}</p><p>Price: ZMW ${it.price.toFixed(2)}</p></div>`;
+        });
+        html += '</div>';
+        html += `<div style="margin-top:1rem;"><strong>Total: ZMW ${Number(total).toFixed(2)}</strong></div>`;
+        html += `<div style="margin-top:1rem;"><strong>Customer:</strong> ${customer.name} / ${customer.phone} / ${customer.email}</div>`;
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = '<p>Failed to parse order data.</p>';
+      }
+    }
+    renderOrder();
+  </script>
+</body>
+</html>
+>>>>>>> 02b7bb53d64b00c9edf1aa76e3b62ac1c63095f0
