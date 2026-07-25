@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {
   "firestore": {
     "rules": "firestore.rules"
@@ -7,13 +6,3 @@
     "rules": "storage.rules"
   }
 }
-=======
-{
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  }
-}
->>>>>>> 02b7bb53d64b00c9edf1aa76e3b62ac1c63095f0
