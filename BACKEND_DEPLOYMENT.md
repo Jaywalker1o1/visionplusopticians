@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Backend Deployment Guide
 
 This project uses a shared backend to store product catalog items and uploaded images. GitHub can host the frontend, but a live backend service is required for shared product updates.
@@ -72,6 +73,7 @@ This project uses a shared backend to store product catalog items and uploaded i
 ## Optional improvement
 - Deploy the backend once and use the same URL in all devices.
 - Do not store secrets in front-end code.
+=======
 # Backend Deployment Guide
 
 This project uses a shared backend to store product catalog items and uploaded images. GitHub can host the frontend, but a live backend service is required for shared product updates.
