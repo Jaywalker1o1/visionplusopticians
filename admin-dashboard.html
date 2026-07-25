@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | Vision Plus Opticians</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="images/vison plus.jpeg" alt="Vision Plus logo" class="brand-logo" /></a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="frames.html">Frames</a>
+        <a href="cases.html">Cases</a>
+        <a href="contact-lenses.html">Contact Lenses</a>
+        <a href="appointment.html">Appointment</a>
+        <a href="admin.html">Admin</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <div class="section-title">
+          <h2>Admin dashboard</h2>
+          <p>Manage the catalog, sync the store across devices, and update the WhatsApp number.</p>
+        </div>
+
+        <div class="admin-grid">
+          <div class="admin-card" id="admin-dashboard">
+            <h3>Catalog controls</h3>
+            <form id="admin-settings-form" class="form-grid">
+              <div class="input-group">
+                <label for="admin-whatsapp-number">WhatsApp number</label>
+                <input id="admin-whatsapp-number" type="text" placeholder="+260..." />
+              </div>
+              <div class="input-group">
+                <label for="backend-api-url">Backend URL</label>
+                <input id="backend-api-url" type="url" placeholder="https://your-backend.onrender.com" />
+              </div>
+              <div class="input-group">
+                <label for="backend-admin-token">Backend admin token</label>
+                <input id="backend-admin-token" type="text" placeholder="optional" />
+              </div>
+              <div class="input-group">
+                <label for="firebase-config">Firebase config JSON</label>
+                <textarea id="firebase-config" rows="6" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
+              </div>
+              <div class="input-group">
+                <label for="supabase-config">Supabase config JSON</label>
+                <textarea id="supabase-config" rows="6" placeholder='{"url":"https://...supabase.co","anonKey":"..."}'></textarea>
+              </div>
+              <div class="input-group">
+                <label><input id="backend-sync-enable" type="checkbox" /> Enable backend sync</label>
+              </div>
+              <div class="input-group">
+                <label><input id="admin-cloud-sync-enable" type="checkbox" /> Enable Firebase sync</label>
+              </div>
+              <div class="input-group">
+                <label><input id="admin-supabase-sync-enable" type="checkbox" /> Enable Supabase sync</label>
+              </div>
+              <div class="form-actions">
+                <button class="button" type="submit">Save settings</button>
+                <button class="button-secondary" type="button" id="backend-test-connection">Test backend</button>
+                <button class="button-secondary" type="button" id="cloud-sync-now">Sync to Firebase</button>
+                <button class="button-secondary" type="button" id="cloud-load-now">Load from Firebase</button>
+                <button class="button-secondary" type="button" id="supabase-sync-now">Sync to Supabase</button>
+                <button class="button-secondary" type="button" id="supabase-load-now">Load from Supabase</button>
+              </div>
+            </form>
+            <p id="admin-settings-message" class="hidden">Settings saved.</p>
+            <p id="backend-status">Backend: not configured</p>
+            <p id="cloud-status">Cloud: not configured</p>
+            <p id="supabase-status">Supabase: not configured</p>
+          </div>
+
+          <div class="admin-card">
+            <h3>Add or edit items</h3>
+            <form id="admin-add-item-form">
+              <input id="admin-edit-id" type="hidden" />
+              <div class="form-grid">
+                <div class="input-group">
+                  <label for="admin-item-category">Category</label>
+                  <select id="admin-item-category">
+                    <option value="frames">Frames</option>
+                    <option value="cases">Cases</option>
+                    <option value="contact-lenses">Contact Lenses</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label for="admin-item-title">Title</label>
+                  <input id="admin-item-title" type="text" required />
+                </div>
+                <div class="input-group">
+                  <label for="admin-item-description">Description</label>
+                  <textarea id="admin-item-description" rows="3" required></textarea>
+                </div>
+                <div class="input-group">
+                  <label for="admin-item-price">Price</label>
+                  <input id="admin-item-price" type="number" min="0" step="0.01" />
+                </div>
+                <div class="input-group">
+                  <label for="admin-item-image">Image</label>
+                  <input id="admin-item-image" type="file" accept="image/*" />
+                  <button class="button-secondary" type="button" id="admin-item-upload-button">Choose image</button>
+                  <img id="admin-item-image-preview" alt="Preview" style="display:none; max-width:100%; border-radius:12px; margin-top:0.75rem;" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="button" type="submit">Add item</button>
+                <button class="button-secondary" type="button" id="logout-button">Logout</button>
+              </div>
+              <p id="admin-add-message" class="hidden">Item saved.</p>
+            </form>
+          </div>
+        </div>
+
+        <div class="admin-card" style="margin-top:1.5rem;">
+          <h3>Current catalog</h3>
+          <div id="admin-item-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>© 2026 Vision Plus Opticians · Optometry, eyewear, and customer care.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
