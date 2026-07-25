@@ -50,7 +50,11 @@ const ADMIN_EMAIL = 'vplusopticians@gmail.com';
   }
 const ADMIN_EMAIL_ALT = 'vplusopticians,@gmail.com';
 const ADMIN_PASSWORD = 'admin1234';
+<<<<<<< HEAD
+const BACKEND_DEFAULT_URL = 'https://visionplusopticians-backend.onrender.com';
+=======
 const BACKEND_DEFAULT_URL = 'http://localhost:4000';
+>>>>>>> 02b7bb53d64b00c9edf1aa76e3b62ac1c63095f0
 const STORAGE_WHATSAPP = 'visionplus_whatsapp_number';
 const STORAGE_CATALOG = 'visionplus_catalog_items';
 const STORAGE_CART = 'visionplus_cart';
@@ -149,7 +153,11 @@ function saveFirebaseConfig(raw) { localStorage.setItem(STORAGE_FIREBASE_CONFIG,
 function getFirebaseConfigRaw() { return localStorage.getItem(STORAGE_FIREBASE_CONFIG) || ''; }
 function isCloudSyncEnabled() { return localStorage.getItem(STORAGE_CLOUD_SYNC) === '1'; }
 function setCloudSyncEnabled(v) { localStorage.setItem(STORAGE_CLOUD_SYNC, v ? '1' : '0'); }
+<<<<<<< HEAD
+function getBackendConfig() { return { url: localStorage.getItem(STORAGE_BACKEND_URL) || BACKEND_DEFAULT_URL, token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '', enabled: localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1' }; }
+=======
 function getBackendConfig() { return { url: localStorage.getItem(STORAGE_BACKEND_URL) || '', token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '', enabled: localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1' }; }
+>>>>>>> 02b7bb53d64b00c9edf1aa76e3b62ac1c63095f0
 function saveBackendConfig({ url, token, enabled }) { if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url); if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token); localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0'); }
 
 function updateBackendStatus(text) { const el = document.getElementById('backend-status'); if (el) el.textContent = text; }
@@ -1715,10 +1723,24 @@ async function initialize() {
   const backendTokenInput = document.getElementById('backend-admin-token');
   const backendCheckbox = document.getElementById('backend-sync-enable');
   const backendTestBtn = document.getElementById('backend-test-connection');
+<<<<<<< HEAD
+  const storedBackendUrl = localStorage.getItem(STORAGE_BACKEND_URL);
+  const backendUrl = storedBackendUrl || BACKEND_DEFAULT_URL;
+  const backendEnabledStored = localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1';
+  const backendEnabled = backendEnabledStored || !!backendUrl;
+  if (backendUrlInput) {
+    backendUrlInput.value = backendUrl;
+    if (!storedBackendUrl) {
+      // Auto-fill the deployed backend URL if no custom URL is stored yet.
+      backendUrlInput.value = backendUrl;
+    }
+  }
+=======
   const backendUrlValue = backendUrlInput ? backendUrlInput.value.trim() : '';
   const backendEnabledStored = localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1';
   const backendEnabled = backendEnabledStored || !!backendUrlValue;
   if (backendUrlInput) backendUrlInput.value = localStorage.getItem(STORAGE_BACKEND_URL) || '';
+>>>>>>> 02b7bb53d64b00c9edf1aa76e3b62ac1c63095f0
   if (backendTokenInput) backendTokenInput.value = localStorage.getItem(STORAGE_BACKEND_TOKEN) || '';
   if (backendCheckbox) {
     backendCheckbox.checked = backendEnabled;

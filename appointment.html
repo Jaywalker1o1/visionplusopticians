@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -128,3 +129,135 @@
   <script src="script.js"></script>
 </body>
 </html>
+=======
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appointment | Vision Plus Opticians</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="images/vison plus.jpeg" alt="Vision Plus logo" class="brand-logo" /></a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="frames.html">Frames</a>
+        <a href="cases.html">Cases</a>
+        <a href="contact-lenses.html">Contact Lenses</a>
+        <a href="appointment.html">Appointment</a>
+        <a href="index.html#contact">Contact</a>
+        <a href="admin.html" id="admin-nav-link">Admin</a>
+        <a href="cart.html" id="cart-nav-link">Cart</a>
+        <a href="#" id="account-button" aria-label="Account"><span class="account-icon">👤</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section hero" style="background-image: url('images/back4.jpeg');">
+      <div class="hero-content container">
+        <p>Book your visit with Vision Plus Opticians</p>
+        <h1>Appointment request</h1>
+        <p>Submit your preferred date and service, and WhatsApp will open so you can send the request directly.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-title">
+          <h2>Request an appointment</h2>
+          <p>Fill in your details and send the request to our WhatsApp team.</p>
+        </div>
+        <div class="contact-grid">
+          <div class="contact-card">
+            <form id="appointment-form">
+              <div class="form-grid">
+                <div class="input-group">
+                  <label for="name">Full name</label>
+                  <input id="name" name="name" type="text" placeholder="Your name" required />
+                </div>
+                <div class="input-group">
+                  <label for="email">Email address</label>
+                  <input id="email" name="email" type="email" placeholder="name@example.com" required />
+                </div>
+                <div class="input-group">
+                  <label for="phone-prefix">Phone number</label>
+                  <div class="phone-input-row">
+                    <select id="phone-prefix" name="phone-prefix">
+                      <option value="+260">+260 (Zambia)</option>
+                      <option value="+1">+1 (USA)</option>
+                      <option value="+44">+44 (UK)</option>
+                      <option value="+27">+27 (South Africa)</option>
+                      <option value="+61">+61 (Australia)</option>
+                      <option value="+91">+91 (India)</option>
+                      <option value="+254">+254 (Kenya)</option>
+                      <option value="+233">+233 (Ghana)</option>
+                    </select>
+                    <input id="phone" name="phone" type="tel" placeholder="712 345 678" />
+                  </div>
+                </div>
+                <div class="input-group">
+                  <label for="service">Service needed</label>
+                  <select id="service" name="service" required>
+                    <option value="eye-exam">Eye exam</option>
+                    <option value="frame-fitting">Frame fitting</option>
+                    <option value="lens-upgrade">Lens upgrade</option>
+                    <option value="colormatic-lenses">ColorMatic lenses</option>
+                    <option value="contact-lenses">Contact lenses</option>
+                    <option value="contact-lens-fitting">Contact lens fitting</option>
+                  </select>
+                  <small class="hint-text">Choose your preferred lenses or fitting type before booking your appointment.</small>
+                </div>
+                <div class="input-group">
+                  <label for="date">Preferred date</label>
+                  <input id="date" name="date" type="date" required />
+                </div>
+                <div class="input-group">
+                  <label for="time-slot">Preferred time slot</label>
+                  <select id="time-slot" name="time-slot" required>
+                    <option value="">Choose a time</option>
+                    <option>09:00</option>
+                    <option>10:00</option>
+                    <option>11:00</option>
+                    <option>12:00</option>
+                    <option>13:00</option>
+                    <option>14:00</option>
+                    <option>15:00</option>
+                    <option>16:00</option>
+                    <option>17:00</option>
+                  </select>
+                  <small class="hint-text">Available slots 09:00–17:00. We'll confirm exact timing.</small>
+                </div>
+                <div class="input-group">
+                  <label for="message">Notes</label>
+                  <textarea id="message" name="message" placeholder="Tell us about your vision needs"></textarea>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="button" type="submit">Send request via WhatsApp</button>
+                <p id="form-message" style="display:none; color: #0f4c81; font-weight:600; margin:0;">Your appointment request has been prepared. WhatsApp will open shortly.</p>
+              </div>
+              <p class="hint-text">This appointment request will be sent to Vision Plus Opticians at <strong id="whatsapp-display">+260768130131</strong>. The WhatsApp number can be changed in the admin panel.</p>
+            </form>
+          </div>
+          <div>
+            <img src="images/WhatsApp Image 2026-07-23 at 22.22.48.jpeg" alt="Appointment request" />
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>© 2026 Vision Plus Opticians · Optometry, eyewear, and customer care.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
+>>>>>>> 02b7bb53d64b00c9edf1aa76e3b62ac1c63095f0
