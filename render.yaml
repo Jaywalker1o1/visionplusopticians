@@ -1,0 +1,27 @@
+services:
+  - type: web_service
+    name: visionplusopticians-backend
+    env: node
+    plan: starter
+    region: oregon
+    branch: main
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/catalog
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: ADMIN_USER
+        value: admin@vision.local
+      - key: ADMIN_PASS
+        value: admin1234
+      - key: APP_URL
+        value: https://visionplusopticians-backend.onrender.com
