@@ -1,0 +1,9 @@
+services:
+  - type: web_service
+    name: visionplusopticians-backend
+    env: node
+    region: oregon
+    branch: main
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
