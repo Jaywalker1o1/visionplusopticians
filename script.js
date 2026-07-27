@@ -14,7 +14,8 @@ const firebaseConfig = {
 const serviceButtons = document.querySelectorAll('.service-tabs button');
 const servicePanels = document.querySelectorAll('.service-content');
 
-const DEFAULT_WHATSAPP = '+260768130131';
+const DEFAULT_WHATSAPP = '+260977936288';
+const LEGACY_WHATSAPP = '+260768130131';
 const ADMIN_EMAIL = 'vplusopticians@gmail.com';
 
   // Export / Import catalog so admins can move catalog (and uploaded images) between devices
@@ -886,6 +887,7 @@ function buildManualFrameItems() {
       description: 'A bold yet elegant 450-series design with a recognizable fashion-forward look.',
       image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.24 (2).jpeg'),
       price: 450.00,
+      imageRotationDeg: 180,
     },
     {
       id: 'manual-frame-450-6',
@@ -1376,7 +1378,11 @@ function createToast(message, options = {}) {
 
 function loadWhatsAppNumber() {
   const saved = localStorage.getItem(STORAGE_WHATSAPP);
-  return saved || DEFAULT_WHATSAPP;
+  if (!saved || saved === LEGACY_WHATSAPP) {
+    localStorage.setItem(STORAGE_WHATSAPP, DEFAULT_WHATSAPP);
+    return DEFAULT_WHATSAPP;
+  }
+  return saved;
 }
 
 function saveWhatsAppNumber(number) {
@@ -1403,9 +1409,7 @@ function findCatalogItem(itemId) {
 
 function updateNavLinks() {
   if (adminNavLink) {
-    // Show admin link for visitors and admins, but hide for signed-in customers who are not admins
-    const showAdminLink = isAdminLoggedIn() || !isCustomerLoggedIn();
-    adminNavLink.style.display = showAdminLink ? 'inline-flex' : 'none';
+    adminNavLink.style.display = isAdminLoggedIn() ? 'inline-flex' : 'none';
   }
   if (cartNavLink) {
     const loggedIn = isCustomerLoggedIn();
@@ -1624,8 +1628,10 @@ function renderCatalog() {
   displayItems.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'product-card';
+    const imageClassName = item.imageRotationDeg ? 'card-image image-rotated' : 'card-image';
+    const imageStyle = item.imageRotationDeg ? `style="--image-rotation:${item.imageRotationDeg}deg;"` : '';
     card.innerHTML = `
-      <img class="card-image" loading="lazy" src="${item.image}" alt="${item.title}" />
+      <img class="${imageClassName}" loading="lazy" src="${item.image}" alt="${item.title}" ${imageStyle} />
       <h4>${item.title}</h4>
       <p>${item.description}</p>
       <div class="product-meta">
@@ -2078,7 +2084,22 @@ async function handleAdminLogin(event) {
   const validEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase() || normalizedEmail === ADMIN_EMAIL_ALT.replace(',', '@').toLowerCase();
   const validPassword = password === ADMIN_PASSWORD;
 
-  // If backend is configured and enabled, try backend auth first
+  // Try the built-in admin account first so the normal form login works reliably.
+  if (validEmail && validPassword) {
+    if (adminLoginError) adminLoginError.style.display = 'none';
+    setAdminLoggedIn(true);
+    updateWhatsAppDisplay();
+    renderAdminItemList();
+    updateNavLinks();
+    if (currentPage.toLowerCase() === 'admin.html') {
+      window.location.replace('admin-dashboard.html');
+    } else {
+      showAdminDashboard();
+    }
+    return;
+  }
+
+  // If backend is configured and enabled, try backend auth as a fallback.
   const backendCfg = getBackendConfig();
   if (backendCfg.enabled && backendCfg.url) {
     try {
