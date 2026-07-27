@@ -692,6 +692,7 @@ const defaultCatalog = [
     title: 'Classic Rectangle Frames',
     description: 'Timeless shape, lightweight fit, and polish-ready design for everyday wear.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.35.jpeg',
+    price: 320.00,
   },
   {
     id: 'frame-2',
@@ -699,6 +700,7 @@ const defaultCatalog = [
     title: 'Modern Round Frames',
     description: 'Bold, fashionable, and perfect for a statement look with clear prescription lenses.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.46.jpeg',
+    price: 360.00,
   },
   {
     id: 'frame-3',
@@ -706,6 +708,39 @@ const defaultCatalog = [
     title: 'Lightweight Metal Frames',
     description: 'Sleek metal design with adjustable nose pads and a refined finish.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.56.jpeg',
+    price: 390.00,
+  },
+  {
+    id: 'frame-450',
+    category: 'frames',
+    title: 'Premium 450 Frame Series',
+    description: 'A fresh, elegant frame collection made for everyday confidence and a modern look.',
+    image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.23 (1).jpeg'),
+    price: 450.00,
+  },
+  {
+    id: 'frame-500',
+    category: 'frames',
+    title: 'Luxury 500 Frame Collection',
+    description: 'Bold lines and a premium finish give these frames a standout, fashion-forward feel.',
+    image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.57 (1).jpeg'),
+    price: 500.00,
+  },
+  {
+    id: 'frame-kids-350',
+    category: 'frames',
+    title: 'Children’s 350 Frame Set',
+    description: 'Bright, cheerful, and comfortable frames designed especially for kids with style.',
+    image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.28 (1).jpeg'),
+    price: 350.00,
+  },
+  {
+    id: 'frame-sunglasses-400',
+    category: 'frames',
+    title: 'Sungrasses 400 Edition',
+    description: 'Trendsetting sunglasses with a classy glow and reliable sun protection.',
+    image: encodeURI('products/frames/sungrasses 400/WhatsApp Image 2026-07-26 at 21.03.29.jpeg'),
+    price: 400.00,
   },
   {
     id: 'case-1',
@@ -713,6 +748,7 @@ const defaultCatalog = [
     title: 'Protective Hard Case',
     description: 'Sturdy, impact-resistant case with soft interior for safe storage.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.34.jpeg',
+    price: 80.00,
   },
   {
     id: 'case-2',
@@ -720,6 +756,7 @@ const defaultCatalog = [
     title: 'Soft Travel Pouch',
     description: 'Light and compact, ideal for a purse or backpack on the go.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.47.jpeg',
+    price: 95.00,
   },
   {
     id: 'case-3',
@@ -727,6 +764,31 @@ const defaultCatalog = [
     title: 'Luxury Designer Case',
     description: 'Premium finish with a secure magnetic closure and elegant style.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.55.jpeg',
+    price: 120.00,
+  },
+  {
+    id: 'case-4',
+    category: 'cases',
+    title: 'Signature Eye Case',
+    description: 'A polished, protective option that keeps your frames neat and ready to wear.',
+    image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.49.jpeg'),
+    price: 85.00,
+  },
+  {
+    id: 'case-5',
+    category: 'cases',
+    title: 'Modern Travel Sleeve',
+    description: 'Slim, stylish, and convenient for daily carrying with extra protection.',
+    image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.51 (1).jpeg'),
+    price: 90.00,
+  },
+  {
+    id: 'case-6',
+    category: 'cases',
+    title: 'Elegant Protective Cover',
+    description: 'A chic cover that guards your eyewear without compromising on style.',
+    image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.52.jpeg'),
+    price: 100.00,
   },
   {
     id: 'lens-1',
@@ -752,10 +814,23 @@ let currentWhatsApp = loadWhatsAppNumber();
 function loadCatalog() {
   try {
     const saved = localStorage.getItem(STORAGE_CATALOG);
-    return saved ? JSON.parse(saved) : defaultCatalog;
+    if (!saved) return [...defaultCatalog];
+
+    const parsed = JSON.parse(saved);
+    const catalogItemsFromStorage = Array.isArray(parsed) ? parsed : [];
+    const existingIds = new Set(catalogItemsFromStorage.map((item) => item.id));
+    const missingItems = defaultCatalog.filter((item) => !existingIds.has(item.id));
+
+    if (missingItems.length) {
+      const updatedCatalog = [...catalogItemsFromStorage, ...missingItems];
+      localStorage.setItem(STORAGE_CATALOG, JSON.stringify(updatedCatalog));
+      return updatedCatalog;
+    }
+
+    return catalogItemsFromStorage;
   } catch (error) {
     console.warn('Unable to parse saved catalog:', error);
-    return defaultCatalog;
+    return [...defaultCatalog];
   }
 }
 
