@@ -1,26 +1,15 @@
 
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyBFpxegfi6emIrtnPMhzShsz6RfKwfYW30",
-    authDomain: "visionplusoptician-6a798.firebaseapp.com",
-    databaseURL: "https://visionplusoptician-6a798-default-rtdb.firebaseio.com",
-    projectId: "visionplusoptician-6a798",
-    storageBucket: "visionplusoptician-6a798.firebasestorage.app",
-    messagingSenderId: "126248518531",
-    appId: "1:126248518531:web:e06f34733ce54770f4acb6",
-    measurementId: "G-SF7RYZC8DD"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
+// Firebase config is kept for compatibility with the existing cloud features.
+const firebaseConfig = {
+  apiKey: "AIzaSyBFpxegfi6emIrtnPMhzShsz6RfKwfYW30",
+  authDomain: "visionplusoptician-6a798.firebaseapp.com",
+  databaseURL: "https://visionplusoptician-6a798-default-rtdb.firebaseio.com",
+  projectId: "visionplusoptician-6a798",
+  storageBucket: "visionplusoptician-6a798.firebasestorage.app",
+  messagingSenderId: "126248518531",
+  appId: "1:126248518531:web:e06f34733ce54770f4acb6",
+  measurementId: "G-SF7RYZC8DD"
+};
 
 const serviceButtons = document.querySelectorAll('.service-tabs button');
 const servicePanels = document.querySelectorAll('.service-content');
@@ -745,7 +734,7 @@ const defaultCatalog = [
   {
     id: 'case-1',
     category: 'cases',
-    title: 'Protective Hard Case',
+    title: 'Shield Guard Case',
     description: 'Sturdy, impact-resistant case with soft interior for safe storage.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.34.jpeg',
     price: 80.00,
@@ -753,7 +742,7 @@ const defaultCatalog = [
   {
     id: 'case-2',
     category: 'cases',
-    title: 'Soft Travel Pouch',
+    title: 'Metro Travel Pouch',
     description: 'Light and compact, ideal for a purse or backpack on the go.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.47.jpeg',
     price: 95.00,
@@ -761,7 +750,7 @@ const defaultCatalog = [
   {
     id: 'case-3',
     category: 'cases',
-    title: 'Luxury Designer Case',
+    title: 'Elite Designer Case',
     description: 'Premium finish with a secure magnetic closure and elegant style.',
     image: 'images/WhatsApp Image 2026-07-23 at 22.22.55.jpeg',
     price: 120.00,
@@ -769,7 +758,7 @@ const defaultCatalog = [
   {
     id: 'case-4',
     category: 'cases',
-    title: 'Signature Eye Case',
+    title: 'Signature Vision Case',
     description: 'A polished, protective option that keeps your frames neat and ready to wear.',
     image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.49.jpeg'),
     price: 85.00,
@@ -777,7 +766,7 @@ const defaultCatalog = [
   {
     id: 'case-5',
     category: 'cases',
-    title: 'Modern Travel Sleeve',
+    title: 'Atlas Travel Sleeve',
     description: 'Slim, stylish, and convenient for daily carrying with extra protection.',
     image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.51 (1).jpeg'),
     price: 90.00,
@@ -785,7 +774,7 @@ const defaultCatalog = [
   {
     id: 'case-6',
     category: 'cases',
-    title: 'Elegant Protective Cover',
+    title: 'Luxe Protective Cover',
     description: 'A chic cover that guards your eyewear without compromising on style.',
     image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.52.jpeg'),
     price: 100.00,
@@ -808,28 +797,538 @@ const defaultCatalog = [
   },
 ];
 
-let catalogItems = loadCatalog();
+let catalogItems = [];
 let currentWhatsApp = loadWhatsAppNumber();
 
-function loadCatalog() {
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function normalizeCatalogPath(value) {
+  return String(value || '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/');
+}
+
+function isImagePath(value) {
+  const normalized = String(value || '').toLowerCase();
+  return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.jfif', '.svg'].some((ext) => normalized.endsWith(ext));
+}
+
+async function listDirectoryEntries(directoryPath) {
+  const normalizedPath = normalizeCatalogPath(directoryPath);
+  const requestPath = normalizedPath ? `${normalizedPath}/` : '/';
+  const response = await fetch(requestPath, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Unable to read ${requestPath}`);
+
+  const html = await response.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  return Array.from(doc.querySelectorAll('a[href]'))
+    .map((link) => link.getAttribute('href'))
+    .filter(Boolean)
+    .map((value) => decodeURIComponent(value).split('?')[0])
+    .filter((value) => value && value !== '.' && value !== '..')
+    .map((value) => value.replace(/^\/+/, ''));
+}
+
+async function discoverImagesFromDirectory(directoryPath) {
+  const entries = await listDirectoryEntries(directoryPath);
+  return entries
+    .filter((entry) => !entry.endsWith('/') && isImagePath(entry))
+    .map((entry) => normalizeCatalogPath(`${directoryPath}/${entry}`));
+}
+
+function buildManualFrameItems() {
+  return [
+    {
+      id: 'manual-frame-450-1',
+      category: 'frames',
+      title: 'Aurelia Classic',
+      description: 'Elegant 450-series frame with a polished, modern finish and everyday comfort.',
+      image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.23 (1).jpeg'),
+      price: 450.00,
+    },
+    {
+      id: 'manual-frame-450-2',
+      category: 'frames',
+      title: 'Nova Rectangle',
+      description: 'Stylish 450-series frame offering a refined silhouette and premium look.',
+      image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.23 (2).jpeg'),
+      price: 450.00,
+    },
+    {
+      id: 'manual-frame-450-3',
+      category: 'frames',
+      title: 'Lumen Square',
+      description: 'Contemporary 450-series frame crafted for confidence and all-day wear.',
+      image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.23.jpeg'),
+      price: 450.00,
+    },
+    {
+      id: 'manual-frame-450-4',
+      category: 'frames',
+      title: 'Eclipse Edge',
+      description: 'Premium 450-series frame with clean lines and a comfortable fit.',
+      image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.24 (1).jpeg'),
+      price: 450.00,
+    },
+    {
+      id: 'manual-frame-450-5',
+      category: 'frames',
+      title: 'Vega Modern',
+      description: 'A bold yet elegant 450-series design with a recognizable fashion-forward look.',
+      image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.24 (2).jpeg'),
+      price: 450.00,
+    },
+    {
+      id: 'manual-frame-450-6',
+      category: 'frames',
+      title: 'Orbit Soft',
+      description: 'Refined 450-series frame that balances simplicity, comfort, and premium styling.',
+      image: encodeURI('products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.24.jpeg'),
+      price: 450.00,
+    },
+    {
+      id: 'manual-frame-500-1',
+      category: 'frames',
+      title: 'Monarch Premium',
+      description: 'Luxury 500-series frame with a high-end silhouette and standout presence.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.57 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-2',
+      category: 'frames',
+      title: 'Velvet Luxe',
+      description: 'Modern 500-series frame featuring a sleek finish and elegant shape.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.57.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-3',
+      category: 'frames',
+      title: 'Atlas Bold',
+      description: 'Premium 500-series frame designed for bold style and effortless wear.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.58 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-4',
+      category: 'frames',
+      title: 'Crest Elegant',
+      description: 'Classy 500-series frame with a refined profile and premium craftsmanship.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.58 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-5',
+      category: 'frames',
+      title: 'Sage Trend',
+      description: 'Fashion-forward 500-series frame made for modern styling and comfort.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.58.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-6',
+      category: 'frames',
+      title: 'Coral Statement',
+      description: 'Confident 500-series frame with a striking shape and premium finish.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.59 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-7',
+      category: 'frames',
+      title: 'Pine Fashion',
+      description: 'Sophisticated 500-series frame built for a sleek and polished everyday look.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.59 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-8',
+      category: 'frames',
+      title: 'Harbor Deluxe',
+      description: 'Luxury 500-series frame offering comfort, approachability, and bold style.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.59.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-9',
+      category: 'frames',
+      title: 'Noir Chic',
+      description: 'Elegant 500-series design with refined detailing and a premium edge.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.00 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-10',
+      category: 'frames',
+      title: 'Ember Contemporary',
+      description: 'Contemporary 500-series frame made for stylish everyday confidence.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.00 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-11',
+      category: 'frames',
+      title: 'Silver Line',
+      description: 'Sharp 500-series lines and a premium finish for a standout profile.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.00 (3).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-12',
+      category: 'frames',
+      title: 'Mira Classic',
+      description: 'A polished 500-series frame that pairs comfortably with modern fashion.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.00.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-13',
+      category: 'frames',
+      title: 'Dawn Modern',
+      description: 'Trendy 500-series frame with a sleek silhouette and high-end appeal.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.01 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-14',
+      category: 'frames',
+      title: 'Ridge Style',
+      description: 'Bold 500-series frame crafted with a fashionable flair and premium finish.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.01 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-15',
+      category: 'frames',
+      title: 'Apex Refined',
+      description: 'Elegant 500-series style with refined edge and confident everyday styling.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.54.01.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-16',
+      category: 'frames',
+      title: 'Luna Premium',
+      description: 'Luxury 500-series frame offering standout shape and lasting comfort.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.02 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-17',
+      category: 'frames',
+      title: 'Halo Designer',
+      description: 'Premium 500-series frame with a contemporary design and polished finish.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.02.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-18',
+      category: 'frames',
+      title: 'Brighton Vogue',
+      description: 'Modern 500-series frame made to deliver comfort and style in equal measure.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.03 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-19',
+      category: 'frames',
+      title: 'Cedar Minimal',
+      description: 'Minimalist 500-series frame with a confident silhouette and refined finish.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.03 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-20',
+      category: 'frames',
+      title: 'Solace Elite',
+      description: 'Elevated 500-series frame crafted for polished, everyday expression.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.03.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-21',
+      category: 'frames',
+      title: 'Aurora Luxe',
+      description: 'An attractive 500-series frame featuring sharp detail and a premium feel.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.04 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-22',
+      category: 'frames',
+      title: 'Vesper Bold',
+      description: 'Bright and stylish 500-series frame with a confident, modern profile.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.04 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-23',
+      category: 'frames',
+      title: 'Crown Sharp',
+      description: 'Premium 500-series frame with a sleek shape and clean detailing.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.04.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-24',
+      category: 'frames',
+      title: 'Zenith Trend',
+      description: 'Fashionable 500-series frame built for modern style and easy comfort.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.05 (1).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-25',
+      category: 'frames',
+      title: 'Noble Modern',
+      description: 'Contemporary 500-series frame with a refined look and strong visual appeal.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.05 (2).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-26',
+      category: 'frames',
+      title: 'Prism Elegant',
+      description: 'Elegant 500-series frame finished for a polished and premium presentation.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.05 (3).jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-27',
+      category: 'frames',
+      title: 'Summit Classic',
+      description: 'Classic-meets-modern 500-series frame with a confident and balanced shape.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.05.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-500-28',
+      category: 'frames',
+      title: 'Regal Deluxe',
+      description: 'Luxury 500-series frame created to elevate everyday dressing with style.',
+      image: encodeURI('products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.55.06.jpeg'),
+      price: 500.00,
+    },
+    {
+      id: 'manual-frame-kids-1',
+      category: 'frames',
+      title: 'Sunny Kids',
+      description: 'Bright and cheerful children’s frame with a comfortable fit and playful character.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.28 (1).jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-2',
+      category: 'frames',
+      title: 'Mini Bloom',
+      description: 'Friendly children’s frame made for youthful style and dependable comfort.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.28.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-3',
+      category: 'frames',
+      title: 'Junior Glow',
+      description: 'Sunny children’s frame that combines comfort with a cheerful, modern look.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.29 (1).jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-4',
+      category: 'frames',
+      title: 'Little Dash',
+      description: 'A fun and practical children’s frame designed for daily wear and easy styling.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.29.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-5',
+      category: 'frames',
+      title: 'Happy Star',
+      description: 'A charming children’s frame with a light, comfortable shape and vibrant feel.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.30 (1).jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-6',
+      category: 'frames',
+      title: 'Kiki Fun',
+      description: 'Colorful children’s frame that balances style, comfort, and personality.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.30.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-7',
+      category: 'frames',
+      title: 'Buddy Bright',
+      description: 'A lightweight and playful children’s frame for everyday confidence.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.31.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-8',
+      category: 'frames',
+      title: 'Pop Mini',
+      description: 'Cute and practical children’s frame with cheerful energy and a comfortable fit.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.32.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-9',
+      category: 'frames',
+      title: 'Spark Junior',
+      description: 'Bright children’s frame designed for a delightful and confident look.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.33.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-10',
+      category: 'frames',
+      title: 'Playful Wave',
+      description: 'Playful children’s frame shaped for comfort and youthful expression.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.34 (1).jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-11',
+      category: 'frames',
+      title: 'Teddy Cool',
+      description: 'Exciting children’s frame with a clean design and cheerful finish.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.34.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-kids-12',
+      category: 'frames',
+      title: 'Little Nova',
+      description: 'Lightweight children’s frame with a fun, youthful feel and durable fit.',
+      image: encodeURI('products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.35.jpeg'),
+      price: 350.00,
+    },
+    {
+      id: 'manual-frame-sunglass-1',
+      category: 'frames',
+      title: 'Sunbeam Shades',
+      description: 'Modern sungrasses design with premium style and reliable sun protection.',
+      image: encodeURI('products/frames/sungrasses 400/WhatsApp Image 2026-07-26 at 21.03.29.jpeg'),
+      price: 400.00,
+    },
+    {
+      id: 'manual-frame-sunglass-2',
+      category: 'frames',
+      title: 'Coastline Shades',
+      description: 'Classic sungrasses frame offering a polished, fashionable finish.',
+      image: encodeURI('products/frames/sungrasses 400/WhatsApp Image 2026-07-26 at 21.03.31.jpeg'),
+      price: 400.00,
+    },
+  ];
+}
+
+function buildManualCaseItems() {
+  return [
+    {
+      id: 'manual-case-1',
+      category: 'cases',
+      title: 'Shield Guard Case',
+      description: 'A durable protective case that keeps your glasses safe with a polished finish.',
+      image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.49.jpeg'),
+      price: 85.00,
+    },
+    {
+      id: 'manual-case-2',
+      category: 'cases',
+      title: 'Metro Travel Pouch',
+      description: 'A sleek travel pouch designed for easy carrying and everyday convenience.',
+      image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.51 (1).jpeg'),
+      price: 90.00,
+    },
+    {
+      id: 'manual-case-3',
+      category: 'cases',
+      title: 'Atlas Soft Sleeve',
+      description: 'A soft protective sleeve that offers light coverage and comfortable storage.',
+      image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.51.jpeg'),
+      price: 95.00,
+    },
+    {
+      id: 'manual-case-4',
+      category: 'cases',
+      title: 'Luxe Protective Cover',
+      description: 'A premium cover crafted to protect your eyewear while adding a stylish touch.',
+      image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.52 (1).jpeg'),
+      price: 100.00,
+    },
+    {
+      id: 'manual-case-5',
+      category: 'cases',
+      title: 'Signature Vision Case',
+      description: 'A refined case with elegant details and dependable protection for daily use.',
+      image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.52.jpeg'),
+      price: 110.00,
+    },
+  ];
+}
+
+async function discoverCatalogItems() {
+  return [...buildManualFrameItems(), ...buildManualCaseItems()];
+}
+
+async function initializeCatalog() {
+  const manualItems = await discoverCatalogItems();
+  const freshCatalog = [...manualItems];
+  saveCatalog(freshCatalog);
+  catalogItems = freshCatalog;
+  renderCatalog();
+  renderAdminItemList();
+}
+
+async function loadCatalog() {
   try {
     const saved = localStorage.getItem(STORAGE_CATALOG);
-    if (!saved) return [...defaultCatalog];
+    let catalogItemsFromStorage = [];
 
-    const parsed = JSON.parse(saved);
-    const catalogItemsFromStorage = Array.isArray(parsed) ? parsed : [];
-    const existingIds = new Set(catalogItemsFromStorage.map((item) => item.id));
-    const missingItems = defaultCatalog.filter((item) => !existingIds.has(item.id));
-
-    if (missingItems.length) {
-      const updatedCatalog = [...catalogItemsFromStorage, ...missingItems];
-      localStorage.setItem(STORAGE_CATALOG, JSON.stringify(updatedCatalog));
-      return updatedCatalog;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      catalogItemsFromStorage = Array.isArray(parsed) ? parsed : [];
     }
 
-    return catalogItemsFromStorage;
+    const discoveredItems = await discoverCatalogItems();
+    const mergedCatalog = [...catalogItemsFromStorage];
+    const existingIds = new Set(mergedCatalog.map((item) => item.id));
+
+    discoveredItems.forEach((item) => {
+      if (!existingIds.has(item.id)) {
+        mergedCatalog.push(item);
+        existingIds.add(item.id);
+      }
+    });
+
+    if (mergedCatalog.length) {
+      localStorage.setItem(STORAGE_CATALOG, JSON.stringify(mergedCatalog));
+      return mergedCatalog;
+    }
+
+    localStorage.setItem(STORAGE_CATALOG, JSON.stringify(defaultCatalog));
+    return [...defaultCatalog];
   } catch (error) {
-    console.warn('Unable to parse saved catalog:', error);
+    console.warn('Unable to load product folders:', error);
+    const saved = localStorage.getItem(STORAGE_CATALOG);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
     return [...defaultCatalog];
   }
 }
@@ -837,6 +1336,29 @@ function loadCatalog() {
 function saveCatalog(items) {
   catalogItems = items;
   localStorage.setItem(STORAGE_CATALOG, JSON.stringify(items));
+  if (typeof window !== 'undefined') {
+    window.__visionplusCatalogVersion = (window.__visionplusCatalogVersion || 0) + 1;
+  }
+}
+
+async function syncCatalogToConfiguredProviders() {
+  try {
+    if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+      const cfg = getBackendConfig();
+      if (cfg.enabled && cfg.url) {
+        const backendItems = JSON.parse(JSON.stringify(catalogItems));
+        await backendReplaceCatalog(backendItems);
+      }
+    }
+  } catch (e) {
+    console.warn('Backend sync after catalog save failed', e);
+  }
+
+  try {
+    await syncCatalogToCloud();
+  } catch (e) {
+    console.warn('Cloud sync after catalog save failed', e);
+  }
 }
 
 function createToast(message, options = {}) {
@@ -1095,7 +1617,11 @@ function renderCatalog() {
   if (framesGrid) framesGrid.innerHTML = '';
   if (casesGrid) casesGrid.innerHTML = '';
   if (contactLensesGrid) contactLensesGrid.innerHTML = '';
-  catalogItems.forEach((item) => {
+
+  const manualCaseItems = buildManualCaseItems();
+  const displayItems = [...catalogItems, ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id))];
+
+  displayItems.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'product-card';
     card.innerHTML = `
@@ -1263,8 +1789,25 @@ function createAccountModal() {
   });
 }
 
-function openAccountModal() { const m = document.getElementById('account-modal'); if (!m) return; m.classList.remove('hidden'); }
-function closeAccountModal() { const m = document.getElementById('account-modal'); if (!m) return; m.classList.add('hidden'); }
+function handleAccountButtonClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!document.getElementById('account-modal')) {
+    createAccountModal();
+  }
+  updateAccountDisplay();
+  openAccountModal();
+}
+
+function bindAccountButtons() {
+  document.querySelectorAll('#account-button').forEach((button) => {
+    button.removeEventListener('click', handleAccountButtonClick);
+    button.addEventListener('click', handleAccountButtonClick);
+  });
+}
+
+function openAccountModal() { const m = document.getElementById('account-modal'); if (!m) return; m.classList.remove('hidden'); m.setAttribute('aria-hidden', 'false'); }
+function closeAccountModal() { const m = document.getElementById('account-modal'); if (!m) return; m.classList.add('hidden'); m.setAttribute('aria-hidden', 'true'); }
 
 function updateAccountDisplay() {
   const btns = document.querySelectorAll('#account-button');
@@ -1682,6 +2225,7 @@ function handleAdminRemoveCategory(event) {
   renderCatalog();
   renderAdminItemList();
   updateAdminRemoveCategoryPreview();
+  syncCatalogToConfiguredProviders().catch(() => {});
   createToast(`Removed ${matching.length} ${category} item${matching.length === 1 ? '' : 's'}.`, { type: 'success' });
 }
 
@@ -1752,7 +2296,7 @@ async function handleAdminAddItem(event) {
 
     renderCatalog();
     renderAdminItemList();
-    await syncCatalogToCloud();
+    await syncCatalogToConfiguredProviders();
     createToast('Item updated.', { type: 'success' });
     adminAddItemForm.reset();
     if (adminItemImagePreview) { adminItemImagePreview.style.display = 'none'; adminItemImagePreview.src = ''; }
@@ -1778,7 +2322,8 @@ async function handleAdminAddItem(event) {
   }
   renderCatalog();
   renderAdminItemList();
-  await syncCatalogToCloud();
+  syncCatalogToConfiguredProviders().catch(() => {});
+  await syncCatalogToConfiguredProviders();
 
   if (adminAddMessage) {
     adminAddMessage.style.display = 'block';
@@ -1852,21 +2397,10 @@ async function initialize() {
   createAccountModal();
   updateAccountDisplay();
   updateWhatsAppDisplay();
+  await initializeCatalog();
   await loadCatalogFromBackendIfConfigured();
-  renderCatalog();
-  renderAdminItemList();
   updateCartButton();
-  // wire account buttons with delegation so clicks work even if the button is re-rendered
-  document.body.addEventListener('click', (e) => {
-    const button = e.target.closest('#account-button');
-    if (!button) return;
-    e.preventDefault();
-    if (!document.getElementById('account-modal')) {
-      createAccountModal();
-    }
-    updateAccountDisplay();
-    openAccountModal();
-  });
+  bindAccountButtons();
 
   serviceButtons.forEach((button) => {
     button.addEventListener('click', () => {
@@ -2048,6 +2582,10 @@ async function initialize() {
   }
   if (isSupabaseSyncEnabled()) {
     initSupabaseIfConfigured().then(ok => { if (ok) startSupabasePoller(); });
+  }
+  if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+    startBackendRealtime();
+    await loadCatalogFromBackendIfConfigured();
   }
   const cloudTestBtn = document.getElementById('cloud-test-connection');
   if (cloudTestBtn) cloudTestBtn.addEventListener('click', async () => {
