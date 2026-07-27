@@ -1242,7 +1242,7 @@ function buildManualCaseItems() {
       title: 'Shield Guard Case',
       description: 'A durable protective case that keeps your glasses safe with a polished finish.',
       image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.49.jpeg'),
-      price: 85.00,
+      price: 50.00,
     },
     {
       id: 'manual-case-2',
@@ -1250,7 +1250,7 @@ function buildManualCaseItems() {
       title: 'Metro Travel Pouch',
       description: 'A sleek travel pouch designed for easy carrying and everyday convenience.',
       image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.51 (1).jpeg'),
-      price: 90.00,
+      price: 50.00,
     },
     {
       id: 'manual-case-3',
@@ -1258,7 +1258,7 @@ function buildManualCaseItems() {
       title: 'Atlas Soft Sleeve',
       description: 'A soft protective sleeve that offers light coverage and comfortable storage.',
       image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.51.jpeg'),
-      price: 95.00,
+      price: 50.00,
     },
     {
       id: 'manual-case-4',
@@ -1266,7 +1266,7 @@ function buildManualCaseItems() {
       title: 'Luxe Protective Cover',
       description: 'A premium cover crafted to protect your eyewear while adding a stylish touch.',
       image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.52 (1).jpeg'),
-      price: 100.00,
+      price: 50.00,
     },
     {
       id: 'manual-case-5',
@@ -1274,7 +1274,7 @@ function buildManualCaseItems() {
       title: 'Signature Vision Case',
       description: 'A refined case with elegant details and dependable protection for daily use.',
       image: encodeURI('products/cases/WhatsApp Image 2026-07-26 at 20.56.52.jpeg'),
-      price: 110.00,
+      price: 50.00,
     },
   ];
 }

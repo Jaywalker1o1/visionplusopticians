@@ -1,0 +1,58 @@
+[
+  {
+    "id": "frame-450-series",
+    "category": "frames",
+    "title": "Premium 450 Frame Series",
+    "description": "Elegant and lightweight frames designed for everyday comfort with a polished look.",
+    "image": "products/frames/450 frames/WhatsApp Image 2026-07-26 at 21.01.23.jpeg",
+    "price": 450
+  },
+  {
+    "id": "frame-500-collection",
+    "category": "frames",
+    "title": "Luxury 500 Frame Collection",
+    "description": "Bold lines and a premium finish make this collection stand out with confidence.",
+    "image": "products/frames/500 frames/WhatsApp Image 2026-07-27 at 14.53.57.jpeg",
+    "price": 500
+  },
+  {
+    "id": "frame-kids-350",
+    "category": "frames",
+    "title": "Children's 350 Frame Set",
+    "description": "Bright, cheerful, and comfortable frames designed especially for kids.",
+    "image": "products/frames/chidren frames 350/WhatsApp Image 2026-07-26 at 21.01.28.jpeg",
+    "price": 350
+  },
+  {
+    "id": "frame-sunglasses-400",
+    "category": "frames",
+    "title": "Sungrasses 400 Edition",
+    "description": "Trendsetting sunglasses with a classy glow and reliable sun protection.",
+    "image": "products/frames/sungrasses 400/WhatsApp Image 2026-07-26 at 21.03.29.jpeg",
+    "price": 400
+  },
+  {
+    "id": "case-signature-eye",
+    "category": "cases",
+    "title": "Signature Eye Case",
+    "description": "A polished, protective case that keeps your eyewear neat and ready to wear.",
+    "image": "products/cases/WhatsApp Image 2026-07-26 at 20.56.49.jpeg",
+    "price": 85
+  },
+  {
+    "id": "case-modern-travel-sleeve",
+    "category": "cases",
+    "title": "Modern Travel Sleeve",
+    "description": "Slim, stylish, and convenient for daily carrying with extra protection.",
+    "image": "products/cases/WhatsApp Image 2026-07-26 at 20.56.51.jpeg",
+    "price": 90
+  },
+  {
+    "id": "case-elegant-protective-cover",
+    "category": "cases",
+    "title": "Elegant Protective Cover",
+    "description": "A chic cover that guards your eyewear without compromising on style.",
+    "image": "products/cases/WhatsApp Image 2026-07-26 at 20.56.52.jpeg",
+    "price": 100
+  }
+]
