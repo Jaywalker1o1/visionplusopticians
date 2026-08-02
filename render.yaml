@@ -1,4 +1,15 @@
 services:
+  - type: static_site
+    name: visionplusopticians-frontend
+    env: static
+    plan: starter
+    region: oregon
+    branch: main
+    rootDir: .
+    buildCommand: 'echo "No build step required"'
+    publishPath: .
+    autoDeploy: true
+
   - type: web_service
     name: visionplusopticians-backend
     env: node

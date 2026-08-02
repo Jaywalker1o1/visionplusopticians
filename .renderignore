@@ -1,0 +1,12 @@
+# Ignore backend and deployment config for static frontend service
+backend/
+.github/
+.gitignore
+render.yaml
+README.md
+BACKEND_DEPLOYMENT.md
+firebase-setup.md
+BACKEND_DEPLOYMENT.md
+*.md
+.env
+.DS_Store
