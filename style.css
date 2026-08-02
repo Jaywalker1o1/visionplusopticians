@@ -672,6 +672,14 @@ img {
   .product-card p {
     font-size: 0.92rem;
   }
+
+  .product-card img,
+  .card-image {
+    height: auto;
+    max-height: 320px;
+    object-fit: contain;
+    background: #f8fafc;
+  }
 }
 
 /* Mobile: keep nav on one horizontal line with scroll when needed */
@@ -1280,7 +1288,13 @@ footer {
   .product-grid { grid-template-columns: 1fr; gap: 1rem; }
 
   .product-card img,
-  .card-image { height: 160px; object-fit: cover; border-radius: 12px; }
+  .card-image {
+    height: auto;
+    max-height: 260px;
+    object-fit: contain;
+    background: #f8fafc;
+    border-radius: 12px;
+  }
 
   .container { width: calc(100% - 1rem); padding-left: 0.5rem; padding-right: 0.5rem; }
 
