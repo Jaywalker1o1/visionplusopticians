@@ -17,6 +17,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const DATA_DIR = path.join(__dirname, 'data');
 const CATALOG_FILE = path.join(DATA_DIR, 'catalog.json');
+const CATALOG_MANIFEST_FILE = path.join(PROJECT_ROOT, 'products', 'catalog-manifest.json');
 const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
 const RESET_TOKENS_FILE = path.join(DATA_DIR, 'reset-tokens.json');
 const ADMIN_CREDENTIALS_FILE = path.join(DATA_DIR, 'admin-credentials.json');
@@ -39,7 +40,10 @@ let ADMIN_PASS = ADMIN_PASS_ENV;
 // ensure directories
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(CATALOG_FILE)) fs.writeFileSync(CATALOG_FILE, JSON.stringify([]));
+if (!fs.existsSync(CATALOG_FILE)) {
+  const manifestItems = loadJsonFile(CATALOG_MANIFEST_FILE, []);
+  fs.writeFileSync(CATALOG_FILE, JSON.stringify(Array.isArray(manifestItems) ? manifestItems : [], null, 2));
+}
 if (!fs.existsSync(ORDERS_FILE)) fs.writeFileSync(ORDERS_FILE, JSON.stringify([]));
 
 function loadJsonFile(filePath, defaultValue) {
@@ -206,9 +210,21 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 function loadCatalog() {
   try {
     const raw = fs.readFileSync(CATALOG_FILE, 'utf8');
-    return JSON.parse(raw || '[]');
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    const manifestItems = loadJsonFile(CATALOG_MANIFEST_FILE, []);
+    if (Array.isArray(manifestItems) && manifestItems.length > 0) {
+      saveJsonFile(CATALOG_FILE, manifestItems);
+      return manifestItems;
+    }
+    return [];
   } catch (e) {
     console.warn('Failed to read catalog', e);
+    const fallbackItems = loadJsonFile(CATALOG_MANIFEST_FILE, []);
+    if (Array.isArray(fallbackItems) && fallbackItems.length > 0) {
+      saveJsonFile(CATALOG_FILE, fallbackItems);
+      return fallbackItems;
+    }
     return [];
   }
 }

@@ -64,7 +64,9 @@ const ADMIN_EMAIL = 'vplusopticians@gmail.com';
   }
 const ADMIN_EMAIL_ALT = 'vplusopticians,@gmail.com';
 const ADMIN_PASSWORD = 'admin1234';
-const BACKEND_DEFAULT_URL = 'https://visionplusopticians-backend.onrender.com';
+const BACKEND_DEFAULT_URL = typeof window !== 'undefined' && window.location?.origin
+  ? window.location.origin
+  : 'https://visionplusopticians-gco6.onrender.com';
 const STORAGE_WHATSAPP = 'visionplus_whatsapp_number';
 const STORAGE_CATALOG = 'visionplus_catalog_items';
 const STORAGE_CART = 'visionplus_cart';
@@ -272,7 +274,15 @@ function saveSupabaseConfig(raw) { localStorage.setItem(STORAGE_SUPABASE_CONFIG,
 function getSupabaseConfigRaw() { return localStorage.getItem(STORAGE_SUPABASE_CONFIG) || ''; }
 function isSupabaseSyncEnabled() { return localStorage.getItem(STORAGE_SUPABASE_SYNC) === '1'; }
 function setSupabaseSyncEnabled(v) { localStorage.setItem(STORAGE_SUPABASE_SYNC, v ? '1' : '0'); }
-function getBackendConfig() { return { url: localStorage.getItem(STORAGE_BACKEND_URL) || BACKEND_DEFAULT_URL, token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '', enabled: localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1' }; }
+function getBackendConfig() {
+  const url = localStorage.getItem(STORAGE_BACKEND_URL) || BACKEND_DEFAULT_URL;
+  const enabledStored = localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1';
+  return {
+    url,
+    token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '',
+    enabled: enabledStored || !!url,
+  };
+}
 function saveBackendConfig({ url, token, enabled }) { if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url); if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token); localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0'); }
 
 function updateBackendStatus(text) { const el = document.getElementById('backend-status'); if (el) el.textContent = text; }
@@ -355,7 +365,7 @@ async function backendFetchCatalog() {
 
 async function loadCatalogFromBackendIfConfigured() {
   const cfg = getBackendConfig();
-  if (!cfg.enabled || !cfg.url) return false;
+  if (!cfg.url) return false;
   try {
     const items = await backendFetchCatalog();
     if (Array.isArray(items)) {
