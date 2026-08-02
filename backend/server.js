@@ -134,6 +134,30 @@ loadResetTokens();
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
+const FRONTEND_PAGES = [
+  'index.html',
+  'admin.html',
+  'appointment.html',
+  'cart.html',
+  'cases.html',
+  'contact-lenses.html',
+  'frames.html',
+  'order.html',
+];
+
+FRONTEND_PAGES.forEach((page) => {
+  const route = `/${page}`;
+  const suffixRoute = `/${page.replace(/\.html$/, '')}`;
+  app.get(route, (req, res) => {
+    res.sendFile(path.join(PROJECT_ROOT, page));
+  });
+  if (suffixRoute !== route) {
+    app.get(suffixRoute, (req, res) => {
+      res.sendFile(path.join(PROJECT_ROOT, page));
+    });
+  }
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(PROJECT_ROOT, 'index.html'));
 });
