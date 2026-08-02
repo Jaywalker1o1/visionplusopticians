@@ -137,6 +137,14 @@ app.use(bodyParser.json({ limit: '10mb' }));
 app.get('/', (req, res) => {
   res.sendFile(path.join(PROJECT_ROOT, 'index.html'));
 });
+app.get('/style.css', (req, res) => {
+  res.type('text/css');
+  res.sendFile(path.join(PROJECT_ROOT, 'style.css'));
+});
+app.get('/script.js', (req, res) => {
+  res.type('application/javascript');
+  res.sendFile(path.join(PROJECT_ROOT, 'script.js'));
+});
 app.use(express.static(PROJECT_ROOT));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
