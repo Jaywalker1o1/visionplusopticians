@@ -13,6 +13,7 @@ const http = require('http');
 const server = http.createServer(app);
 const { Server } = require('socket.io');
 const PORT = process.env.PORT || 4000;
+const PROJECT_ROOT = path.join(__dirname, '..');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const DATA_DIR = path.join(__dirname, 'data');
 const CATALOG_FILE = path.join(DATA_DIR, 'catalog.json');
@@ -133,6 +134,10 @@ loadResetTokens();
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(PROJECT_ROOT, 'index.html'));
+});
+app.use(express.static(PROJECT_ROOT));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
 // setup socket.io for realtime catalog updates
