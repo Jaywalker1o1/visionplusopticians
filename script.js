@@ -63,9 +63,15 @@ const ADMIN_EMAILS = ['admin@vision.local', 'vplusopticians@gmail.com'];
     });
   }
 const ADMIN_PASSWORD = 'admin1234';
-const BACKEND_DEFAULT_URL = typeof window !== 'undefined' && window.location?.origin
-  ? window.location.origin
-  : 'https://visionplusopticians-gco6.onrender.com';
+const DEFAULT_BACKEND_URL = 'https://visionplusopticians-backend.onrender.com';
+function getDefaultBackendUrl() {
+  if (typeof window === 'undefined') return DEFAULT_BACKEND_URL;
+  const host = (window.location?.hostname || '').toLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:4000';
+  if (host.includes('visionplusopticians-backend')) return window.location.origin;
+  return DEFAULT_BACKEND_URL;
+}
+const BACKEND_DEFAULT_URL = getDefaultBackendUrl();
 const STORAGE_WHATSAPP = 'visionplus_whatsapp_number';
 const STORAGE_CATALOG = 'visionplus_catalog_items';
 const STORAGE_CART = 'visionplus_cart';
@@ -274,7 +280,21 @@ function getSupabaseConfigRaw() { return localStorage.getItem(STORAGE_SUPABASE_C
 function isSupabaseSyncEnabled() { return localStorage.getItem(STORAGE_SUPABASE_SYNC) === '1'; }
 function setSupabaseSyncEnabled(v) { localStorage.setItem(STORAGE_SUPABASE_SYNC, v ? '1' : '0'); }
 function getBackendConfig() {
-  const url = localStorage.getItem(STORAGE_BACKEND_URL) || BACKEND_DEFAULT_URL;
+  const storedUrl = localStorage.getItem(STORAGE_BACKEND_URL);
+  let url = storedUrl ? storedUrl.trim() : '';
+  if (!url) {
+    url = BACKEND_DEFAULT_URL;
+  } else {
+    try {
+      const storedHost = new URL(url, window.location.href).hostname.toLowerCase();
+      const currentHost = (window.location?.hostname || '').toLowerCase();
+      if (storedHost === currentHost || storedHost === 'visionplusopticians-gco6.onrender.com' || storedHost === 'visionplusopticians.store') {
+        url = BACKEND_DEFAULT_URL;
+      }
+    } catch (err) {
+      url = url || BACKEND_DEFAULT_URL;
+    }
+  }
   const enabledStoredValue = localStorage.getItem(STORAGE_BACKEND_ENABLED);
   const enabledStored = enabledStoredValue === '1';
   const enabled = enabledStoredValue === null ? !!url : enabledStored;
@@ -2567,7 +2587,7 @@ async function initialize() {
   const backendCheckbox = document.getElementById('backend-sync-enable');
   const backendTestBtn = document.getElementById('backend-test-connection');
   const storedBackendUrl = localStorage.getItem(STORAGE_BACKEND_URL);
-  const backendUrl = storedBackendUrl || BACKEND_DEFAULT_URL;
+  const backendUrl = getBackendConfig().url;
   const backendEnabledStored = localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1';
   const backendEnabled = backendEnabledStored || !!backendUrl;
   if (backendUrlInput) {
