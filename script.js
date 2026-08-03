@@ -1425,6 +1425,16 @@ function updateCatalogItems(items) {
   }
 }
 
+function getMergedCatalog() {
+  const manualFrameItems = buildManualFrameItems();
+  const manualCaseItems = buildManualCaseItems();
+  return [
+    ...catalogItems,
+    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+  ];
+}
+
 function markPendingCatalogChanges() {
   pendingCatalogChanges = true;
   if (adminItemSaveButton) adminItemSaveButton.style.display = 'inline-flex';
@@ -1992,13 +2002,7 @@ async function deleteCatalogItem(itemId, itemTitle) {
   const confirmation = confirm(`Delete "${itemTitle}" from the catalog? This action cannot be undone.`);
   if (!confirmation) return;
 
-  const manualFrameItems = buildManualFrameItems();
-  const manualCaseItems = buildManualCaseItems();
-  const mergedCatalog = [
-    ...catalogItems,
-    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
-    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
-  ];
+  const mergedCatalog = getMergedCatalog();
   const updatedCatalog = mergedCatalog.filter((product) => product.id !== itemId);
   saveCatalog(updatedCatalog);
   clearPendingCatalogChanges();
@@ -2023,13 +2027,7 @@ function renderAdminItemList() {
   if (!adminItemList) return;
   adminItemList.innerHTML = '';
 
-  const manualFrameItems = buildManualFrameItems();
-  const manualCaseItems = buildManualCaseItems();
-  const displayItems = [
-    ...catalogItems,
-    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
-    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
-  ];
+  const displayItems = getMergedCatalog();
 
   displayItems.forEach((item) => {
     const entry = document.createElement('div');
@@ -2062,14 +2060,7 @@ function renderAdminItemList() {
 }
 
 function startEditItem(itemId) {
-  const manualFrameItems = buildManualFrameItems();
-  const manualCaseItems = buildManualCaseItems();
-  const mergedCatalog = [
-    ...catalogItems,
-    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
-    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
-  ];
-  const item = (mergedCatalog || []).find(i => i.id === itemId);
+  const item = getMergedCatalog().find(i => i.id === itemId);
   if (!item) return;
   // populate add form for editing
   const editIdField = document.getElementById('admin-edit-id');
@@ -2425,7 +2416,7 @@ async function handleAdminAddItem(event) {
       r.readAsDataURL(file);
     });
   } else if (isEdit) {
-    const existingItem = (catalogItems || []).find((it) => it.id === editIdField.value);
+    const existingItem = getMergedCatalog().find((it) => it.id === editIdField.value);
     dataUrl = existingItem?.image || '';
   } else {
     createToast('Please select an image for the new item.', { type: 'warning' });
@@ -2444,12 +2435,28 @@ async function handleAdminAddItem(event) {
   // If editing an existing item, update instead of creating new
   if (isEdit) {
     const existingId = editIdField.value;
-    const updated = (catalogItems || []).map(it => {
-      if (it.id === existingId) {
-        return { ...it, category, title, description, price, image: dataUrl };
-      }
-      return it;
-    });
+    const existingItem = getMergedCatalog().find((it) => it.id === existingId);
+    if (!existingItem) {
+      createToast('Unable to find the item to update.', { type: 'warning' });
+      return;
+    }
+
+    const updatedItem = {
+      ...existingItem,
+      id: existingId,
+      category,
+      title,
+      description,
+      price,
+      image: dataUrl || existingItem.image || '',
+    };
+
+    let updated;
+    if ((catalogItems || []).some((it) => it.id === existingId)) {
+      updated = (catalogItems || []).map((it) => (it.id === existingId ? updatedItem : it));
+    } else {
+      updated = [...(catalogItems || []), updatedItem];
+    }
 
     saveCatalog(updated);
     clearPendingCatalogChanges();
