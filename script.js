@@ -16,7 +16,7 @@ const servicePanels = document.querySelectorAll('.service-content');
 
 const DEFAULT_WHATSAPP = '+260977936288';
 const LEGACY_WHATSAPP = '+260768130131';
-const ADMIN_EMAIL = 'vplusopticians@gmail.com';
+const ADMIN_EMAILS = ['admin@vision.local', 'vplusopticians@gmail.com'];
 
   // Export / Import catalog so admins can move catalog (and uploaded images) between devices
   const exportBtn = document.getElementById('export-catalog');
@@ -62,7 +62,6 @@ const ADMIN_EMAIL = 'vplusopticians@gmail.com';
       importInput.value = '';
     });
   }
-const ADMIN_EMAIL_ALT = 'vplusopticians,@gmail.com';
 const ADMIN_PASSWORD = 'admin1234';
 const BACKEND_DEFAULT_URL = typeof window !== 'undefined' && window.location?.origin
   ? window.location.origin
@@ -647,7 +646,7 @@ function isAdminLoggedIn() {
 
 function isValidAdminCredentials(email, password) {
   const normalizedEmail = email.replace(',', '@').toLowerCase();
-  const validEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase() || normalizedEmail === ADMIN_EMAIL_ALT.replace(',', '@').toLowerCase();
+  const validEmail = ADMIN_EMAILS.some((allowed) => normalizedEmail === allowed.toLowerCase());
   return validEmail && password === ADMIN_PASSWORD;
 }
 
