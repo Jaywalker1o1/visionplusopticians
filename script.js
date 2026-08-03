@@ -2392,14 +2392,37 @@ async function handleAdminAddItem(event) {
   }
 
   adminAddItemForm.reset();
+}
 
+function handleAppointmentSubmit(event) {
+  event.preventDefault();
+  if (!appointmentForm) return;
+
+  const name = document.getElementById('name')?.value.trim() || '';
+  const email = document.getElementById('email')?.value.trim() || '';
+  const phonePrefix = document.getElementById('phone-prefix')?.value || '';
+  const phone = document.getElementById('phone')?.value.trim() || '';
+  const service = document.getElementById('service')?.value || '';
+  const date = document.getElementById('date')?.value || '';
+  const timeSlot = document.getElementById('time-slot')?.value || '';
+  const message = document.getElementById('message')?.value.trim() || '';
+
+  if (!name || !email || !service || !date || !timeSlot) {
+    createToast('Please fill in all required appointment fields.', { type: 'warning' });
+    return;
+  }
+
+  const text = encodeURIComponent(
+    `Appointment request from ${name} (${email})\n` +
     `Phone: ${phonePrefix} ${phone}\n` +
     `Service: ${service}\n` +
     `Preferred date: ${date}\n` +
     `Preferred time: ${timeSlot}\n` +
     `Notes: ${message || 'N/A'}`
   );
-  const whatsappUrl = `https://wa.me/${number.replace('+', '')}?text=${text}`;
+
+  const number = normalizeWhatsApp(currentWhatsApp).replace('+', '');
+  const whatsappUrl = `https://wa.me/${number}?text=${text}`;
 
   if (formMessage) {
     formMessage.textContent = 'Your appointment request is being sent to WhatsApp.';
