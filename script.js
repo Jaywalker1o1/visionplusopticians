@@ -275,14 +275,20 @@ function isSupabaseSyncEnabled() { return localStorage.getItem(STORAGE_SUPABASE_
 function setSupabaseSyncEnabled(v) { localStorage.setItem(STORAGE_SUPABASE_SYNC, v ? '1' : '0'); }
 function getBackendConfig() {
   const url = localStorage.getItem(STORAGE_BACKEND_URL) || BACKEND_DEFAULT_URL;
-  const enabledStored = localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1';
+  const enabledStoredValue = localStorage.getItem(STORAGE_BACKEND_ENABLED);
+  const enabledStored = enabledStoredValue === '1';
+  const enabled = enabledStoredValue === null ? !!url : enabledStored;
   return {
     url,
     token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '',
-    enabled: enabledStored,
+    enabled,
   };
 }
-function saveBackendConfig({ url, token, enabled }) { if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url); if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token); localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0'); }
+function saveBackendConfig({ url, token, enabled }) {
+  if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url);
+  if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token);
+  localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0');
+}
 
 function updateBackendStatus(text) { const el = document.getElementById('backend-status'); if (el) el.textContent = text; }
 
@@ -1303,6 +1309,10 @@ async function discoverCatalogItems() {
 
 async function initializeCatalog() {
   catalogItems = await loadCatalog();
+  if (getBackendConfig().enabled) {
+    const backendLoaded = await loadCatalogFromBackendIfConfigured();
+    if (backendLoaded) return;
+  }
   renderCatalog();
   renderAdminItemList();
 }
@@ -1378,7 +1388,7 @@ async function savePendingCatalogChanges() {
   clearPendingCatalogChanges();
 
   try {
-    if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+    if (getBackendConfig().enabled) {
       await syncCatalogToConfiguredProviders();
       createToast('Catalog changes saved and synced.', { type: 'success' });
       return;
@@ -1394,12 +1404,10 @@ async function savePendingCatalogChanges() {
 
 async function syncCatalogToConfiguredProviders() {
   try {
-    if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
-      const cfg = getBackendConfig();
-      if (cfg.enabled && cfg.url) {
-        const backendItems = JSON.parse(JSON.stringify(catalogItems));
-        await backendReplaceCatalog(backendItems);
-      }
+    const cfg = getBackendConfig();
+    if (cfg.enabled && cfg.url) {
+      const backendItems = JSON.parse(JSON.stringify(catalogItems));
+      await backendReplaceCatalog(backendItems);
     }
   } catch (e) {
     console.warn('Backend sync after catalog save failed', e);
@@ -2258,7 +2266,7 @@ async function handleAdminSettings(event) {
   if (backendTokenInput) localStorage.setItem(STORAGE_BACKEND_TOKEN, backendTokenInput.value.trim());
   if (backendCheckbox) localStorage.setItem(STORAGE_BACKEND_ENABLED, backendCheckbox.checked ? '1' : '0');
   // start or stop backend sync
-  if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+  if (getBackendConfig().enabled) {
     startBackendRealtime();
     await loadCatalogFromBackendIfConfigured();
   } else stopBackendPoller();
@@ -2596,9 +2604,8 @@ async function initialize() {
   if (isSupabaseSyncEnabled()) {
     initSupabaseIfConfigured().then(ok => { if (ok) startSupabasePoller(); });
   }
-  if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+  if (getBackendConfig().enabled) {
     startBackendRealtime();
-    await loadCatalogFromBackendIfConfigured();
   }
   const cloudTestBtn = document.getElementById('cloud-test-connection');
   if (cloudTestBtn) cloudTestBtn.addEventListener('click', async () => {
