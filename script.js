@@ -645,6 +645,12 @@ function isAdminLoggedIn() {
   return sessionStorage.getItem('visionplus_admin_logged_in') === '1';
 }
 
+function isValidAdminCredentials(email, password) {
+  const normalizedEmail = email.replace(',', '@').toLowerCase();
+  const validEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase() || normalizedEmail === ADMIN_EMAIL_ALT.replace(',', '@').toLowerCase();
+  return validEmail && password === ADMIN_PASSWORD;
+}
+
 const appointmentForm = document.getElementById('appointment-form');
 const formMessage = document.getElementById('form-message');
 const whatsappDisplay = document.getElementById('whatsapp-display');
@@ -1765,8 +1771,21 @@ function createAccountModal() {
     e.preventDefault();
     const email = document.getElementById('cust-login-email').value.trim();
     const pwd = document.getElementById('cust-login-password').value;
+
+    if (isValidAdminCredentials(email, pwd)) {
+      setAdminLoggedIn(true);
+      updateNavLinks();
+      closeAccountModal();
+      window.location.replace('admin.html');
+      return;
+    }
+
     const res = loginCustomer(email, pwd);
-    if (!res.ok) { document.getElementById('customer-login-msg').textContent = 'Invalid credentials'; document.getElementById('customer-login-msg').style.display = 'block'; return; }
+    if (!res.ok) {
+      document.getElementById('customer-login-msg').textContent = 'Invalid credentials';
+      document.getElementById('customer-login-msg').style.display = 'block';
+      return;
+    }
     document.getElementById('customer-login-msg').style.display = 'none';
     updateAccountDisplay();
     closeAccountModal();
