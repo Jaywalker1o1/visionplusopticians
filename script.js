@@ -1992,7 +1992,14 @@ async function deleteCatalogItem(itemId, itemTitle) {
   const confirmation = confirm(`Delete "${itemTitle}" from the catalog? This action cannot be undone.`);
   if (!confirmation) return;
 
-  const updatedCatalog = catalogItems.filter((product) => product.id !== itemId);
+  const manualFrameItems = buildManualFrameItems();
+  const manualCaseItems = buildManualCaseItems();
+  const mergedCatalog = [
+    ...catalogItems,
+    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+  ];
+  const updatedCatalog = mergedCatalog.filter((product) => product.id !== itemId);
   saveCatalog(updatedCatalog);
   clearPendingCatalogChanges();
   renderCatalog();
@@ -2055,7 +2062,14 @@ function renderAdminItemList() {
 }
 
 function startEditItem(itemId) {
-  const item = (catalogItems || []).find(i => i.id === itemId);
+  const manualFrameItems = buildManualFrameItems();
+  const manualCaseItems = buildManualCaseItems();
+  const mergedCatalog = [
+    ...catalogItems,
+    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+  ];
+  const item = (mergedCatalog || []).find(i => i.id === itemId);
   if (!item) return;
   // populate add form for editing
   const editIdField = document.getElementById('admin-edit-id');
