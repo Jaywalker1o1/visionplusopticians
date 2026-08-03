@@ -2205,12 +2205,10 @@ async function handleAdminLogin(event) {
     return;
   }
 
-  const normalizedEmail = email.replace(',', '@').toLowerCase();
-  const validEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase() || normalizedEmail === ADMIN_EMAIL_ALT.replace(',', '@').toLowerCase();
-  const validPassword = password === ADMIN_PASSWORD;
+  const validAdmin = isValidAdminCredentials(email, password);
 
   // Try the built-in admin account first so the normal form login works reliably.
-  if (validEmail && validPassword) {
+  if (validAdmin) {
     if (adminLoginError) adminLoginError.style.display = 'none';
     setAdminLoggedIn(true);
     updateWhatsAppDisplay();
