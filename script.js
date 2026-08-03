@@ -1378,27 +1378,21 @@ async function initializeCatalog() {
 async function loadCatalog() {
   try {
     const saved = localStorage.getItem(STORAGE_CATALOG);
-    let catalogItemsFromStorage = [];
-
     if (saved) {
-      const parsed = JSON.parse(saved);
-      catalogItemsFromStorage = Array.isArray(parsed) ? parsed : [];
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('Unable to parse saved catalog:', e);
+      }
     }
 
     const discoveredItems = await discoverCatalogItems();
-    const mergedCatalog = [...catalogItemsFromStorage];
-    const existingIds = new Set(mergedCatalog.map((item) => item.id));
-
-    discoveredItems.forEach((item) => {
-      if (!existingIds.has(item.id)) {
-        mergedCatalog.push(item);
-        existingIds.add(item.id);
-      }
-    });
-
-    if (mergedCatalog.length) {
-      localStorage.setItem(STORAGE_CATALOG, JSON.stringify(mergedCatalog));
-      return mergedCatalog;
+    if (Array.isArray(discoveredItems) && discoveredItems.length) {
+      localStorage.setItem(STORAGE_CATALOG, JSON.stringify(discoveredItems));
+      return discoveredItems;
     }
 
     localStorage.setItem(STORAGE_CATALOG, JSON.stringify(defaultCatalog));
@@ -1999,15 +1993,15 @@ async function deleteCatalogItem(itemId, itemTitle) {
   if (!confirmation) return;
 
   const updatedCatalog = catalogItems.filter((product) => product.id !== itemId);
-  updateCatalogItems(updatedCatalog);
-  markPendingCatalogChanges();
+  saveCatalog(updatedCatalog);
+  clearPendingCatalogChanges();
   renderCatalog();
   renderAdminItemList();
 
   try {
     const cfg = getBackendConfig();
     if (cfg.enabled && cfg.url) {
-      await backendDeleteItem(itemId);
+      await backendReplaceCatalog(updatedCatalog);
       createToast(`Removed “${itemTitle}” from the catalog and synced it.`, { type: 'success' });
       return;
     }
@@ -2015,7 +2009,7 @@ async function deleteCatalogItem(itemId, itemTitle) {
     console.warn('Backend delete failed', error);
   }
 
-  createToast(`Removed “${itemTitle}” from the catalog. Click Save changes to persist.`, { type: 'success' });
+  createToast(`Removed “${itemTitle}” from the catalog.`, { type: 'success' });
 }
 
 function renderAdminItemList() {
@@ -2435,8 +2429,8 @@ async function handleAdminAddItem(event) {
       return it;
     });
 
-    updateCatalogItems(updated);
-    markPendingCatalogChanges();
+    saveCatalog(updated);
+    clearPendingCatalogChanges();
 
     try {
       const cfg = getBackendConfig();
@@ -2444,7 +2438,7 @@ async function handleAdminAddItem(event) {
         await backendReplaceCatalog(updated);
         createToast('Item updated and synced to the shared catalog.', { type: 'success' });
       } else {
-        createToast('Item updated. Click Save changes to persist.', { type: 'success' });
+        createToast('Item updated.', { type: 'success' });
       }
     } catch (error) {
       console.warn('Backend edit sync failed', error);
@@ -2463,11 +2457,11 @@ async function handleAdminAddItem(event) {
     return;
   }
 
-  updateCatalogItems([...(catalogItems || []), item]);
-  markPendingCatalogChanges();
+  saveCatalog([...(catalogItems || []), item]);
+  clearPendingCatalogChanges();
   renderCatalog();
   renderAdminItemList();
-  createToast('Item added. Click Save changes to persist.', { type: 'success' });
+  createToast('Item added.', { type: 'success' });
 
   if (adminAddMessage) {
     adminAddMessage.style.display = 'block';
