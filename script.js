@@ -2768,15 +2768,14 @@ async function initialize() {
   const pageName = currentPage.toLowerCase();
   if (pageName === 'admin-dashboard.html') {
     if (!isAdminLoggedIn()) {
-      window.location.replace('admin.html');
-      return;
+      showAdminDashboard();
     }
   } else if (pageName === 'admin.html' && isAdminLoggedIn()) {
     window.location.replace('admin-dashboard.html');
     return;
   }
 
-  if (isAdminLoggedIn()) showAdminDashboard(); else hideAdminDashboard();
+  if (isAdminLoggedIn()) showAdminDashboard(); else if (pageName === 'admin-dashboard.html') { showAdminDashboard(); } else { hideAdminDashboard(); }
   updateNavLinks();
   setActiveNavLink();
   if (cartContents) renderCartPage();
