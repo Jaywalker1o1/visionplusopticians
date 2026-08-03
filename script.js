@@ -1998,12 +1998,23 @@ async function deleteCatalogItem(itemId, itemTitle) {
   const confirmation = confirm(`Delete "${itemTitle}" from the catalog? This action cannot be undone.`);
   if (!confirmation) return;
 
-  const backendCfg = getBackendConfig();
   const updatedCatalog = catalogItems.filter((product) => product.id !== itemId);
   updateCatalogItems(updatedCatalog);
   markPendingCatalogChanges();
   renderCatalog();
   renderAdminItemList();
+
+  try {
+    const cfg = getBackendConfig();
+    if (cfg.enabled && cfg.url) {
+      await backendDeleteItem(itemId);
+      createToast(`Removed “${itemTitle}” from the catalog and synced it.`, { type: 'success' });
+      return;
+    }
+  } catch (error) {
+    console.warn('Backend delete failed', error);
+  }
+
   createToast(`Removed “${itemTitle}” from the catalog. Click Save changes to persist.`, { type: 'success' });
 }
 
@@ -2427,6 +2438,19 @@ async function handleAdminAddItem(event) {
     updateCatalogItems(updated);
     markPendingCatalogChanges();
 
+    try {
+      const cfg = getBackendConfig();
+      if (cfg.enabled && cfg.url) {
+        await backendReplaceCatalog(updated);
+        createToast('Item updated and synced to the shared catalog.', { type: 'success' });
+      } else {
+        createToast('Item updated. Click Save changes to persist.', { type: 'success' });
+      }
+    } catch (error) {
+      console.warn('Backend edit sync failed', error);
+      createToast('Item updated locally, but the backend sync failed.', { type: 'warning' });
+    }
+
     // reset edit state
     if (editIdField) editIdField.value = '';
     const submitBtn = adminAddItemForm.querySelector('button[type="submit"]');
@@ -2434,7 +2458,6 @@ async function handleAdminAddItem(event) {
 
     renderCatalog();
     renderAdminItemList();
-    createToast('Item updated. Click Save changes to persist.', { type: 'success' });
     adminAddItemForm.reset();
     if (adminItemImagePreview) { adminItemImagePreview.style.display = 'none'; adminItemImagePreview.src = ''; }
     return;
