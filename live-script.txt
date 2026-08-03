@@ -1,4 +1,4 @@
-
+﻿
 // Firebase config is kept for compatibility with the existing cloud features.
 const firebaseConfig = {
   apiKey: "AIzaSyBFpxegfi6emIrtnPMhzShsz6RfKwfYW30",
@@ -2324,28 +2324,17 @@ async function handleAdminAddItem(event) {
   const title = adminAddItemForm.querySelector('#admin-item-title')?.value.trim();
   const description = adminAddItemForm.querySelector('#admin-item-description')?.value.trim();
   const price = parseFloat(adminAddItemForm.querySelector('#admin-item-price')?.value || '0') || 0;
-  const editIdField = document.getElementById('admin-edit-id');
-  const isEdit = editIdField && editIdField.value;
 
   if (!category || !title || !description) return;
-
   const file = fileInput?.files && fileInput.files[0];
-  let dataUrl = '';
+  if (!file) return;
 
-  if (file) {
-    dataUrl = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
-  } else if (isEdit) {
-    const existingItem = (catalogItems || []).find((it) => it.id === editIdField.value);
-    dataUrl = existingItem?.image || '';
-  } else {
-    createToast('Please select an image for the new item.', { type: 'warning' });
-    return;
-  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
 
   const item = {
     id: `${category}-${Date.now()}`,
@@ -2357,6 +2346,8 @@ async function handleAdminAddItem(event) {
   };
 
   // If editing an existing item, update instead of creating new
+  const editIdField = document.getElementById('admin-edit-id');
+  const isEdit = editIdField && editIdField.value;
   if (isEdit) {
     const existingId = editIdField.value;
     const updated = (catalogItems || []).map(it => {
@@ -2401,37 +2392,14 @@ async function handleAdminAddItem(event) {
   }
 
   adminAddItemForm.reset();
-}
 
-function handleAppointmentSubmit(event) {
-  event.preventDefault();
-  if (!appointmentForm) return;
-
-  const name = document.getElementById('name')?.value.trim() || '';
-  const email = document.getElementById('email')?.value.trim() || '';
-  const phonePrefix = document.getElementById('phone-prefix')?.value || '';
-  const phone = document.getElementById('phone')?.value.trim() || '';
-  const service = document.getElementById('service')?.value || '';
-  const date = document.getElementById('date')?.value || '';
-  const timeSlot = document.getElementById('time-slot')?.value || '';
-  const message = document.getElementById('message')?.value.trim() || '';
-
-  if (!name || !email || !service || !date || !timeSlot) {
-    createToast('Please fill in all required appointment fields.', { type: 'warning' });
-    return;
-  }
-
-  const text = encodeURIComponent(
-    `Appointment request from ${name} (${email})\n` +
     `Phone: ${phonePrefix} ${phone}\n` +
     `Service: ${service}\n` +
     `Preferred date: ${date}\n` +
     `Preferred time: ${timeSlot}\n` +
     `Notes: ${message || 'N/A'}`
   );
-
-  const number = normalizeWhatsApp(currentWhatsApp).replace('+', '');
-  const whatsappUrl = `https://wa.me/${number}?text=${text}`;
+  const whatsappUrl = `https://wa.me/${number.replace('+', '')}?text=${text}`;
 
   if (formMessage) {
     formMessage.textContent = 'Your appointment request is being sent to WhatsApp.';
@@ -2711,3 +2679,4 @@ function setActiveNavLink() {
 }
 
 initialize();
+
