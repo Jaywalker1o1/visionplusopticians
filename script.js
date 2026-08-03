@@ -1356,6 +1356,42 @@ function saveCatalog(items) {
   }
 }
 
+function updateCatalogItems(items) {
+  catalogItems = items;
+  if (typeof window !== 'undefined') {
+    window.__visionplusCatalogVersion = (window.__visionplusCatalogVersion || 0) + 1;
+  }
+}
+
+function markPendingCatalogChanges() {
+  pendingCatalogChanges = true;
+  if (adminItemSaveButton) adminItemSaveButton.style.display = 'inline-flex';
+}
+
+function clearPendingCatalogChanges() {
+  pendingCatalogChanges = false;
+  if (adminItemSaveButton) adminItemSaveButton.style.display = 'none';
+}
+
+async function savePendingCatalogChanges() {
+  saveCatalog(catalogItems);
+  clearPendingCatalogChanges();
+
+  try {
+    if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
+      await syncCatalogToConfiguredProviders();
+      createToast('Catalog changes saved and synced.', { type: 'success' });
+      return;
+    }
+  } catch (e) {
+    console.warn('Sync after save failed', e);
+    createToast('Catalog saved locally, but sync failed.', { type: 'warning' });
+    return;
+  }
+
+  createToast('Catalog changes saved locally.', { type: 'success' });
+}
+
 async function syncCatalogToConfiguredProviders() {
   try {
     if (localStorage.getItem(STORAGE_BACKEND_ENABLED) === '1') {
@@ -1635,8 +1671,13 @@ function renderCatalog() {
   if (casesGrid) casesGrid.innerHTML = '';
   if (contactLensesGrid) contactLensesGrid.innerHTML = '';
 
+  const manualFrameItems = buildManualFrameItems();
   const manualCaseItems = buildManualCaseItems();
-  const displayItems = [...catalogItems, ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id))];
+  const displayItems = [
+    ...catalogItems,
+    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+  ];
 
   displayItems.forEach((item) => {
     const card = document.createElement('div');
@@ -1890,23 +1931,12 @@ async function deleteCatalogItem(itemId, itemTitle) {
   if (!confirmation) return;
 
   const backendCfg = getBackendConfig();
-  if (backendCfg.enabled && backendCfg.url) {
-    try {
-      await backendDeleteItem(itemId);
-      await loadCatalogFromBackendIfConfigured();
-      createToast(`Removed “${itemTitle}” from the backend catalog.`, { type: 'success' });
-      return;
-    } catch (e) {
-      console.warn('Backend delete failed, falling back to local delete', e);
-      createToast('Backend delete failed, deleted locally only.', { type: 'warning' });
-    }
-  }
-
   const updatedCatalog = catalogItems.filter((product) => product.id !== itemId);
-  saveCatalog(updatedCatalog);
+  updateCatalogItems(updatedCatalog);
+  markPendingCatalogChanges();
   renderCatalog();
   renderAdminItemList();
-  createToast(`Removed “${itemTitle}” from the catalog.`, { type: 'success' });
+  createToast(`Removed “${itemTitle}” from the catalog. Click Save changes to persist.`, { type: 'success' });
 }
 
 function renderAdminItemList() {
@@ -2269,12 +2299,12 @@ function handleAdminRemoveCategory(event) {
   const confirmed = confirm(`Remove all ${category} items from the catalog? This cannot be undone.`);
   if (!confirmed) return;
   const updated = catalogItems.filter(item => item.category !== category);
-  saveCatalog(updated);
+  updateCatalogItems(updated);
   renderCatalog();
   renderAdminItemList();
   updateAdminRemoveCategoryPreview();
-  syncCatalogToConfiguredProviders().catch(() => {});
-  createToast(`Removed ${matching.length} ${category} item${matching.length === 1 ? '' : 's'}.`, { type: 'success' });
+  markPendingCatalogChanges();
+  createToast(`Removed ${matching.length} ${category} item${matching.length === 1 ? '' : 's'}. Click Save changes to persist.`, { type: 'success' });
 }
 
 async function handleAdminAddItem(event) {
@@ -2312,7 +2342,6 @@ async function handleAdminAddItem(event) {
   const isEdit = editIdField && editIdField.value;
   if (isEdit) {
     const existingId = editIdField.value;
-    // find existing and update fields
     const updated = (catalogItems || []).map(it => {
       if (it.id === existingId) {
         return { ...it, category, title, description, price, image: dataUrl };
@@ -2320,68 +2349,33 @@ async function handleAdminAddItem(event) {
       return it;
     });
 
-    // push changes to backend if configured
-    const backendCfg = getBackendConfig();
-    if (backendCfg.enabled && backendCfg.url) {
-      try {
-        // upload image and replace catalog via backend
-        const url = await backendUploadImage(dataUrl);
-        const withUrls = updated.map(it => it.id === existingId ? { ...it, image: url } : it);
-        await backendReplaceCatalog(withUrls);
-        saveCatalog(withUrls);
-      } catch (e) {
-        console.warn('Backend update failed, saving locally', e);
-        saveCatalog(updated);
-      }
-    } else {
-      saveCatalog(updated);
-    }
+    updateCatalogItems(updated);
+    markPendingCatalogChanges();
 
     // reset edit state
     if (editIdField) editIdField.value = '';
     const submitBtn = adminAddItemForm.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.textContent = 'Add item';
-    if (adminItemSaveButton) adminItemSaveButton.style.display = 'none';
 
     renderCatalog();
     renderAdminItemList();
-    await syncCatalogToConfiguredProviders();
-    createToast('Item updated.', { type: 'success' });
+    createToast('Item updated. Click Save changes to persist.', { type: 'success' });
     adminAddItemForm.reset();
     if (adminItemImagePreview) { adminItemImagePreview.style.display = 'none'; adminItemImagePreview.src = ''; }
     return;
   }
 
-  // If backend sync enabled, upload image and create item via backend
-  const backendCfg = getBackendConfig();
-  if (backendCfg.enabled && backendCfg.url) {
-    try {
-      const url = await backendUploadImage(dataUrl);
-      item.image = url;
-      await backendCreateItem(item);
-      // fetch latest catalog from backend to keep in sync
-      const latest = await backendFetchCatalog();
-      if (Array.isArray(latest)) saveCatalog(latest);
-    } catch (e) {
-      console.warn('Backend add failed, falling back to local', e);
-      saveCatalog([...catalogItems, item]);
-    }
-  } else {
-    saveCatalog([...catalogItems, item]);
-  }
+  updateCatalogItems([...(catalogItems || []), item]);
+  markPendingCatalogChanges();
   renderCatalog();
   renderAdminItemList();
-  syncCatalogToConfiguredProviders().catch(() => {});
-  await syncCatalogToConfiguredProviders();
+  createToast('Item added. Click Save changes to persist.', { type: 'success' });
 
   if (adminAddMessage) {
     adminAddMessage.style.display = 'block';
     setTimeout(() => {
       adminAddMessage.style.display = 'none';
     }, 2500);
-  }
-  if (adminItemSaveButton && !document.getElementById('admin-edit-id')?.value) {
-    adminItemSaveButton.style.display = 'none';
   }
 
   if (adminItemImagePreview) {
@@ -2390,44 +2384,7 @@ async function handleAdminAddItem(event) {
   }
 
   adminAddItemForm.reset();
-  // If cloud sync enabled, try to upload this item's image and update catalog with cloud URL
-  if (isCloudSyncEnabled()) {
-    initFirebaseIfConfigured().then(async (ok) => {
-      if (!ok) return;
-      try {
-        const ext = item.image.substring(5, item.image.indexOf(';')).split('/')[1] || 'jpg';
-        const path = `visionplus/catalog/${item.id}.${ext}`;
-        const url = await uploadDataUrlToStorage(item.image, path);
-        // update local catalog with cloud url
-        const updated = (catalogItems || []).map(it => it.id === item.id ? { ...it, image: url } : it);
-        saveCatalog(updated);
-        renderCatalog();
-        renderAdminItemList();
-        createToast('Item uploaded to cloud', { type: 'success' });
-      } catch (e) {
-        console.warn('Cloud upload failed for item', e);
-      }
-    });
-  }
-}
 
-function handleAppointmentSubmit(event) {
-  event.preventDefault();
-  if (!appointmentForm) return;
-
-  const name = appointmentForm.querySelector('#name')?.value.trim();
-  const email = appointmentForm.querySelector('#email')?.value.trim();
-  const phonePrefix = appointmentForm.querySelector('#phone-prefix')?.value || '';
-  const phone = appointmentForm.querySelector('#phone')?.value.trim() || '';
-  const service = appointmentForm.querySelector('#service')?.value;
-  const date = appointmentForm.querySelector('#date')?.value;
-  const timeSlot = appointmentForm.querySelector('#time-slot')?.value || '';
-  const message = appointmentForm.querySelector('#message')?.value.trim();
-
-  const number = normalizeWhatsApp(currentWhatsApp);
-  const text = encodeURIComponent(
-    `Appointment request from ${name}\n` +
-    `Email: ${email}\n` +
     `Phone: ${phonePrefix} ${phone}\n` +
     `Service: ${service}\n` +
     `Preferred date: ${date}\n` +
@@ -2512,9 +2469,7 @@ async function initialize() {
     adminAddItemForm.addEventListener('submit', handleAdminAddItem);
     if (adminItemSaveButton) {
       adminItemSaveButton.style.display = 'none';
-      adminItemSaveButton.addEventListener('click', () => {
-        if (adminAddItemForm) adminAddItemForm.requestSubmit();
-      });
+      adminItemSaveButton.addEventListener('click', savePendingCatalogChanges);
     }
     const fileInput = adminAddItemForm.querySelector('#admin-item-image');
     if (adminItemUploadButton && fileInput) {
