@@ -173,6 +173,14 @@ app.get('/script.js', (req, res) => {
   res.type('application/javascript');
   res.sendFile(path.join(PROJECT_ROOT, 'script.js'));
 });
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.sendFile(path.join(PROJECT_ROOT, 'robots.txt'));
+});
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  res.sendFile(path.join(PROJECT_ROOT, 'sitemap.xml'));
+});
 app.use(express.static(PROJECT_ROOT));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
