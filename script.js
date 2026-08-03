@@ -2016,7 +2016,15 @@ function renderAdminItemList() {
   if (!adminItemList) return;
   adminItemList.innerHTML = '';
 
-  catalogItems.forEach((item) => {
+  const manualFrameItems = buildManualFrameItems();
+  const manualCaseItems = buildManualCaseItems();
+  const displayItems = [
+    ...catalogItems,
+    ...manualFrameItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+    ...manualCaseItems.filter((item) => !catalogItems.some((existing) => existing.id === item.id)),
+  ];
+
+  displayItems.forEach((item) => {
     const entry = document.createElement('div');
     entry.className = 'admin-item-entry';
     entry.innerHTML = `
