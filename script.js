@@ -2084,7 +2084,10 @@ function startEditItem(itemId) {
   // change button text to indicate update
   const submitBtn = form?.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.textContent = 'Save changes';
-  if (adminItemSaveButton) adminItemSaveButton.style.display = 'inline-flex';
+  if (adminItemSaveButton) {
+    adminItemSaveButton.textContent = 'Save changes';
+    adminItemSaveButton.style.display = 'inline-flex';
+  }
 }
 
 function showAdminDashboard() {
