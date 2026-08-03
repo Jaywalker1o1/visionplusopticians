@@ -279,7 +279,7 @@ function getBackendConfig() {
   return {
     url,
     token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '',
-    enabled: enabledStored || !!url,
+    enabled: enabledStored,
   };
 }
 function saveBackendConfig({ url, token, enabled }) { if (url !== undefined) localStorage.setItem(STORAGE_BACKEND_URL, url); if (token !== undefined) localStorage.setItem(STORAGE_BACKEND_TOKEN, token); localStorage.setItem(STORAGE_BACKEND_ENABLED, enabled ? '1' : '0'); }
@@ -663,6 +663,7 @@ const adminSettingsForm = document.getElementById('admin-settings-form');
 const adminAddItemForm = document.getElementById('admin-add-item-form');
 const adminRemoveCategoryForm = document.getElementById('admin-remove-category-form');
 const adminLogoutButton = document.getElementById('logout-button');
+const adminItemSaveButton = document.getElementById('admin-item-save-button');
 const adminItemList = document.getElementById('admin-item-list');
 const adminWhatsappInput = document.getElementById('admin-whatsapp-number');
 const adminItemUploadButton = document.getElementById('admin-item-upload-button');
@@ -1301,10 +1302,7 @@ async function discoverCatalogItems() {
 }
 
 async function initializeCatalog() {
-  const manualItems = await discoverCatalogItems();
-  const freshCatalog = [...manualItems];
-  saveCatalog(freshCatalog);
-  catalogItems = freshCatalog;
+  catalogItems = await loadCatalog();
   renderCatalog();
   renderAdminItemList();
 }
@@ -1970,6 +1968,7 @@ function startEditItem(itemId) {
   // change button text to indicate update
   const submitBtn = form?.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.textContent = 'Save changes';
+  if (adminItemSaveButton) adminItemSaveButton.style.display = 'inline-flex';
 }
 
 function showAdminDashboard() {
@@ -2342,6 +2341,7 @@ async function handleAdminAddItem(event) {
     if (editIdField) editIdField.value = '';
     const submitBtn = adminAddItemForm.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.textContent = 'Add item';
+    if (adminItemSaveButton) adminItemSaveButton.style.display = 'none';
 
     renderCatalog();
     renderAdminItemList();
@@ -2379,6 +2379,9 @@ async function handleAdminAddItem(event) {
     setTimeout(() => {
       adminAddMessage.style.display = 'none';
     }, 2500);
+  }
+  if (adminItemSaveButton && !document.getElementById('admin-edit-id')?.value) {
+    adminItemSaveButton.style.display = 'none';
   }
 
   if (adminItemImagePreview) {
@@ -2507,6 +2510,12 @@ async function initialize() {
 
   if (adminAddItemForm) {
     adminAddItemForm.addEventListener('submit', handleAdminAddItem);
+    if (adminItemSaveButton) {
+      adminItemSaveButton.style.display = 'none';
+      adminItemSaveButton.addEventListener('click', () => {
+        if (adminAddItemForm) adminAddItemForm.requestSubmit();
+      });
+    }
     const fileInput = adminAddItemForm.querySelector('#admin-item-image');
     if (adminItemUploadButton && fileInput) {
       adminItemUploadButton.addEventListener('click', () => fileInput.click());
