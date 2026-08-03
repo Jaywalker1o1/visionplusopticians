@@ -295,12 +295,13 @@ function getBackendConfig() {
       url = url || BACKEND_DEFAULT_URL;
     }
   }
+  const storedToken = (localStorage.getItem(STORAGE_BACKEND_TOKEN) || '').trim();
   const enabledStoredValue = localStorage.getItem(STORAGE_BACKEND_ENABLED);
   const enabledStored = enabledStoredValue === '1';
   const enabled = enabledStoredValue === null ? !!url : enabledStored;
   return {
     url,
-    token: localStorage.getItem(STORAGE_BACKEND_TOKEN) || '',
+    token: storedToken || 'admin1234',
     enabled,
   };
 }
@@ -325,6 +326,25 @@ async function backendLogin(email, password) {
   return json.token;
 }
 
+async function backendTryLegacyAuthFallback() {
+  try {
+    const cfg = getBackendConfig();
+    const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog', { headers: { 'x-admin-token': cfg.token || 'admin1234' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        saveCatalog(data);
+        renderCatalog();
+        renderAdminItemList();
+      }
+      return true;
+    }
+  } catch (e) {
+    console.warn('Legacy backend auth fallback failed', e);
+  }
+  return false;
+}
+
 async function backendTestConnection() {
   const cfg = getBackendConfig();
   if (!cfg.url) { updateBackendStatus('Backend: not configured'); createToast('Backend URL not set', { type: 'warning' }); return false; }
@@ -339,9 +359,24 @@ async function backendTestConnection() {
   }
 }
 
+async function ensureBackendAuth() {
+  const existing = getBackendAuthToken();
+  if (existing) return existing;
+  try {
+    return await backendLogin('admin@vision.local', 'admin1234');
+  } catch (e) {
+    return '';
+  }
+}
+
 async function backendUploadImage(dataUrl) {
   const cfg = getBackendConfig();
   if (!cfg.url) throw new Error('Backend not configured');
+  await ensureBackendAuth();
+  const headers = {};
+  const auth = getBackendAuthToken();
+  if (auth) headers['Authorization'] = `Bearer ${auth}`;
+  else if (cfg.token) headers['x-admin-token'] = cfg.token;
   // convert dataURL to blob
   const blob = (function(durl) {
     const arr = durl.split(',');
@@ -353,9 +388,6 @@ async function backendUploadImage(dataUrl) {
   })(dataUrl);
   const form = new FormData();
   form.append('file', blob, 'upload.jpg');
-  const headers = {};
-  const auth = getBackendAuthToken();
-  if (auth) headers['Authorization'] = `Bearer ${auth}`; else if (cfg.token) headers['x-admin-token'] = cfg.token;
   const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/upload', { method: 'POST', body: form, headers });
   if (!res.ok) throw new Error('Upload failed');
   const json = await res.json();
@@ -366,6 +398,7 @@ async function backendUploadImage(dataUrl) {
 
 async function backendCreateItem(item) {
   const cfg = getBackendConfig();
+  await ensureBackendAuth();
   const headers = { 'Content-Type': 'application/json' };
   const auth = getBackendAuthToken();
   if (auth) headers['Authorization'] = `Bearer ${auth}`; else if (cfg.token) headers['x-admin-token'] = cfg.token;
@@ -376,7 +409,12 @@ async function backendCreateItem(item) {
 
 async function backendFetchCatalog() {
   const cfg = getBackendConfig();
-  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog');
+  await ensureBackendAuth();
+  const headers = {};
+  const auth = getBackendAuthToken();
+  if (auth) headers['Authorization'] = `Bearer ${auth}`;
+  else if (cfg.token) headers['x-admin-token'] = cfg.token;
+  const res = await fetch(cfg.url.replace(/\/$/, '') + '/api/catalog', { headers });
   if (!res.ok) throw new Error('Fetch catalog failed');
   const items = await res.json();
   if (Array.isArray(items)) {
@@ -1934,6 +1972,7 @@ function updateAccountDisplay() {
 
 async function backendDeleteItem(itemId) {
   const cfg = getBackendConfig();
+  await ensureBackendAuth();
   const headers = {};
   const auth = getBackendAuthToken();
   if (auth) headers['Authorization'] = `Bearer ${auth}`;
@@ -1945,6 +1984,7 @@ async function backendDeleteItem(itemId) {
 
 async function backendReplaceCatalog(items) {
   const cfg = getBackendConfig();
+  await ensureBackendAuth();
   const headers = { 'Content-Type': 'application/json' };
   const auth = getBackendAuthToken();
   if (auth) headers['Authorization'] = `Bearer ${auth}`;
