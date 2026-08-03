@@ -225,7 +225,10 @@ function loadCatalog() {
       saveJsonFile(CATALOG_FILE, manifestItems);
       return manifestItems;
     }
-    return [];
+
+    const fallbackItems = [];
+    saveJsonFile(CATALOG_FILE, fallbackItems);
+    return fallbackItems;
   } catch (e) {
     console.warn('Failed to read catalog', e);
     const fallbackItems = loadJsonFile(CATALOG_MANIFEST_FILE, []);
@@ -233,7 +236,10 @@ function loadCatalog() {
       saveJsonFile(CATALOG_FILE, fallbackItems);
       return fallbackItems;
     }
-    return [];
+
+    const emptyItems = [];
+    saveJsonFile(CATALOG_FILE, emptyItems);
+    return emptyItems;
   }
 }
 
